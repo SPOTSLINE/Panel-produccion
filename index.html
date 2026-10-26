@@ -37,7 +37,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .rail a.off{opacity:.5}
 .rail .grp{font-size:12px;opacity:.5;padding:18px 10px 6px}
 .rail .foot{margin-top:auto;font-size:12px;opacity:.6;padding:10px}
-main{padding:28px 32px 60px;max-width:1280px;width:100%}
+main{padding:28px 32px 60px;max-width:1280px;width:100%;min-width:0}
 h1{font-stretch:112%;font-weight:700;font-size:28px;margin:0 0 4px;letter-spacing:-.01em}
 .lead{color:var(--muted);margin:0 0 22px;max-width:72ch}
 h2{font-size:17px;font-weight:650;margin:0 0 12px}
@@ -73,6 +73,8 @@ textarea{resize:vertical;min-height:38px}
 .tabs button:hover{color:var(--ink)}
 .tabs button.on{color:var(--ink);border-color:var(--lamp)}
 .tw{overflow-x:auto;margin:0 -4px}
+.tw.fit{overflow-x:auto}.tw.fit table{font-size:12px}.tw.fit th{white-space:normal;padding:5px 3px;vertical-align:bottom;font-size:11.5px}.tw.fit td{padding:5px 3px;overflow-wrap:break-word}.tw.fit.reg td:nth-last-child(2){min-width:110px;max-width:220px}.tw.fit td.n,.tw.fit.reg td:nth-child(-n+3){white-space:nowrap}.tw.fit .btn.link{padding:1px 2px}
+@media (max-width:900px){.tw.fit{overflow-x:auto}}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:7px 8px;border-bottom:1px solid var(--line2);vertical-align:top}
@@ -296,7 +298,7 @@ body.tvon .app{display:none}
     <a href="#auditoria" data-v="auditoria">Registro de cambios</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-27 a</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-27 c</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -2327,8 +2329,11 @@ const GR={
    if(xp>0&&xh>0&&t>fin){const X=xh*60,net=Math.max(0,X-(+c.refMin||0))/X;pm+=xp*Math.min(t-fin,X)*net}return pm},
  obj(pm,c){return c.objEf*pm/c.minUS},piso(pm,c){return c.pisoEf*pm/c.minUS},
  std(code){const k=GR_EQ[code]||code;return GR_STD[k]||null},
- lotes(f,c){c=c||this.c();return entArm().filter(e=>e.tipo==='armado'&&e.fecha===f).map(e=>{const st=this.std(String(e.code||'').toUpperCase());const q=+e.qty||0;
-   return {code:e.code,qty:q,min:toMin(e.fin)??toMin(e.ini)??0,us:st?q*(st[0]+st[1]+st[2])/c.minUS:0,sin:!st}}).sort((a,b)=>a.min-b.min)},
+ lotes(f,c){c=c||this.c();const A=entArm().filter(e=>e.tipo==='armado'&&e.fecha===f).map(e=>{const st=this.std(String(e.code||'').toUpperCase());const q=+e.qty||0;
+   return {code:e.code,qty:q,min:toMin(e.fin)??toMin(e.ini)??0,us:st?q*(st[0]+st[1]+st[2])/c.minUS:0,sin:!st}});
+   /* piezas que salen de pintura ya armadas: suman con las unidades spot de su código */
+   for(const e of entPint())if(e.fecha===f&&e.tipo==='tanda'){const code=PLP.armadaDeTanda(e);if(!code)continue;const st=this.std(String(code).toUpperCase());const q=+e.ok||0;A.push({code,qty:q,min:toMin(e.fin)??toMin(e.ini)??0,us:st?q*(st[0]+st[1]+st[2])/c.minUS:0,sin:!st,pint:true})}
+   return A.sort((a,b)=>a.min-b.min)},
  usDia(f,c){return this.lotes(f,c).reduce((a,l)=>a+l.us,0)+(+this.dias()[f]?.usManual||0)},
  desde(c){if(c.desde)return c.desde;let m=null;for(const p of S.arm||[])if((p.items||[]).some(i=>i.tipo==='armado')&&(!m||p.fecha<m))m=p.fecha;return m||today()},
  pay(ef,c){return ef==null?null:(ef<c.objEf?0:Math.min(c.tope,1+(c.tope-1)*(ef-c.objEf)/(this.topeEf(c)-c.objEf)))},
@@ -2544,7 +2549,7 @@ todos(force){const b=$('#tpT');if(!b)return;if(!force&&b.contains(document.activ
    ${sel('op','Operario',[['','Todos'],...P.map(p=>[p.id,p.nombre])])}${sel('tipo','Tipo de máquina',[['','Todos'],...Object.entries(T).map(([k,t])=>[k,t.nombre])])}${sel('reg','Registro',[['','Producción y paradas'],['prod','Solo producción'],['parada','Solo paradas']])}
    ${sel('origen','Origen',[['','Todos'],...Object.entries(ORG)])}<label class="f" style="flex:1 1 170px">Buscar<input data-tf="q" value="${esc(F.q)}" placeholder="OP, artículo, pieza…"></label></div>
    <div class="row" style="margin:8px 0 0;justify-content:space-between;align-items:center"><p class="note" style="margin:0">${nf(E.length)} registros: ${nf(r.prod/60,1)} hs productivas, ${nf(r.par/60,1)} hs no productivas, ${nf(r.qty)} piezas, eficiencia ${pct(r.ef)}.</p><button class="btn sm" id="tpXls" ${E.length?'':'disabled'}>Descargar Excel</button></div></section>
-   <section class="panel">${E.length?`<div class="tw"><table><tr>${puedeEditReg()?bkTH():''}<th>Fecha</th><th>Horario</th><th>Operario</th><th>Legajo</th><th>Máquina</th><th>Registro</th><th>OP</th><th>Artículo</th><th>Pieza</th><th>Operación</th><th class="n">Cantidad</th><th class="n">Scrap</th><th class="n">Min</th><th class="n">Eficiencia</th><th>Origen</th><th>Obs.</th><th></th></tr>
+   <section class="panel">${E.length?`<div class="tw fit reg"><table><tr>${puedeEditReg()?bkTH():''}<th>Fecha</th><th>Horario</th><th>Operario</th><th>Legajo</th><th>Máquina</th><th>Registro</th><th>OP</th><th>Artículo</th><th>Pieza</th><th>Operación</th><th class="n">Cantidad</th><th class="n">Scrap</th><th class="n">Min</th><th class="n">Eficiencia</th><th>Origen</th><th>Obs.</th><th></th></tr>
    ${E.slice(0,MAX).map(e=>{const ef=e.std_min!=null&&e.min?e.std_min/e.min:null;return `<tr>${puedeEditReg()?bkTD(e._doc+'|'+e.id):''}<td>${fmtD(e.fecha)}</td><td>${esc(e.ini)}–${esc(e.fin)}</td><td>${esc(persona(e.operario))}</td><td class="note">${esc(legOf(e.operario))}</td><td>${esc(e.centro||'')}</td>
     <td>${e.tipo==='prod'?'Producción':`<span class="pill bad">${esc(motivo(e.motivo)?.nombre||'Parada')}</span>`}</td><td>${e.op_numero?'OP '+esc(e.op_numero):e.tipo==='prod'?'<span class="note">sin orden</span>':''}</td><td>${esc(e.articulo||'')}</td><td>${esc(e.pieza||'')}</td><td>${esc(e.paso||'')}</td>
     <td class="n">${e.tipo==='prod'?nf(e.qty):''}</td><td class="n">${e.tipo==='prod'&&e.scrap?nf(e.scrap):''}</td><td class="n">${nf(e.min)}</td><td class="n ${ef==null?'':ef>=.75?'good':ef<.55?'poor':''}">${pct(ef)}</td><td class="note">${esc(ORG[e.origen||'manual']||e.origen)}</td><td class="note">${esc(e.obs||'')}</td>
@@ -2804,12 +2809,12 @@ function stockPintura(){const R={};const g=k=>R[k]=R[k]||{key:k,...infoKey(k),re
   for(const X of Object.values(R)){X.crudo=Math.max(0,X.rec-X.usado);for(const c of Object.values(X.pint))c.disp=Math.max(0,c.ok-c.env)}return R}
 V.pintura={tab:'linea',
 mount(){$('#main').innerHTML=header('Pintura','Lo que llega del taller para pintar, la carga de cada tanda de la cadena, el stock pintado por color y el envío a armado.')+
-  `<div id="pPers"></div><div class="tabs ptabs" id="piT"><button data-pi="linea">Línea del día</button><button data-pi="cargar">Carga manual</button><button data-pi="pcol" class="solo-plan">Planificar por color</button><button data-pi="ord">Órdenes de pintura</button><button data-pi="crudo">Piezas crudas</button><button data-pi="pint">Pintado disponible</button><button data-pi="reg">Registros</button></div><div id="piB"></div>`;
+  `<div id="pPers"></div><div class="tabs ptabs" id="piT"><button data-pi="linea">Línea del día</button><button data-pi="plan">Plan</button><button data-pi="cargar">Carga manual</button><button data-pi="pcol" class="solo-plan">Planificar por color</button><button data-pi="ord">Órdenes de pintura</button><button data-pi="crudo">Piezas crudas</button><button data-pi="pint">Pintado disponible</button><button data-pi="reg">Registros</button></div><div id="piB"></div>`;
   document.querySelectorAll('[data-pi]').forEach(b=>b.onclick=()=>{this.tab=b.dataset.pi;this.render(true)});document.querySelectorAll('.solo-plan').forEach(b=>b.classList.toggle('hide',!S.canPlan));if(this.tab==='pcol'&&!S.canPlan)this.tab='linea';this.render(true)},
 update(){this.render(false)},
 render(force){const B=$('#piB');if(!B)return;document.querySelectorAll('[data-pi]').forEach(b=>b.classList.toggle('on',b.dataset.pi===this.tab));
   const PP=personalDeArea('pintura');$('#pPers').innerHTML=`<section class="panel" style="padding:12px 16px"><b>Personal de pintura hoy</b> <span class="note">${PP.length}</span>${btnAgregarPers('pintura')}<div class="chips" style="margin-top:6px">${PP.map(p=>{const d=derivVigente(p.id,today());const h=S.horas?estadoHoras(p.id,today()):null;const can=puedeManejar(p.id);return `<span class="chip ${h?.aus?'aus':''}${can?' click':''}" ${can?`data-per="${esc(p.id)}" role="button" tabindex="0" title="Tocá para derivar, pasar a otro sector o dar de baja"`:''}>${esc(p.nombre)}${d?' <small class="note">derivado</small>':''}${h?.aus?' '+esc(h.label):''}</span>`}).join('')||'<span class="note">No hay personal asignado a Pintura. Agregalo con + Agregar persona.</span>'}</div></section>`;bindPersonasEn($('#pPers'),'pintura');
-  if(this.tab==='cargar'){if(!force&&B.contains(document.activeElement))return;this.form(B)}else if(this.tab==='pcol'){if(!force&&B.contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;V.pcolor.render(B)}else if(this.tab==='linea'){B.innerHTML=htmlLineaPintura();bindLineaPintura(B)}else if(this.tab==='ord'){B.innerHTML=htmlOrdenesPintura();bindOrdenesPintura(B)}else if(this.tab==='crudo')this.crudo(B);else if(this.tab==='pint')this.pintado(B);else{if(!force&&B.contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;this.registros(B)}},
+  if(this.tab==='cargar'){if(!force&&B.contains(document.activeElement))return;this.form(B)}else if(this.tab==='pcol'){if(!force&&B.contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;V.pcolor.render(B)}else if(this.tab==='linea'){B.innerHTML=htmlLineaPintura();bindLineaPintura(B)}else if(this.tab==='ord'){B.innerHTML=htmlOrdenesPintura();bindOrdenesPintura(B)}else if(this.tab==='plan'){if(!force&&B.contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;PLP.render(B)}else if(this.tab==='crudo')this.crudo(B);else if(this.tab==='pint')this.pintado(B);else{if(!force&&B.contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;this.registros(B)}},
 form(B){const R=stockPintura();const cr=Object.values(R).filter(X=>X.crudo>0).sort((a,b)=>a.pieza.localeCompare(b.pieza));const PP=personalDeArea('pintura');const C=colores();const M=S.M.motivos?.items||[];
   const hoy=entPint().filter(e=>e.fecha===today());const last=hoy.reduce((a,e)=>toMin(e.fin)>toMin(a)?e.fin:a,hoy[0]?.fin||'06:00');
   B.innerHTML=`<div class="grid2"><section class="panel"><div class="tabs" style="margin-top:0"><button class="on" data-pt2="tanda">Tanda</button><button data-pt2="parada">Parada de cadena</button></div>
@@ -2857,7 +2862,7 @@ pintado(B){const R=stockPintura();const rows=[];for(const X of Object.values(R))
     try{await S.db.collection('movimientos').doc(id).set({id,tipo:'pint_salida',fecha:today(),ts:new Date().toISOString(),key:X.key,pieza:X.pieza,codigo:X.codigo||null,color:c,qty:q,area:'Armado',por:S.uid||null});toast(nf(q)+' '+X.pieza+' '+c+' enviadas a armado')}catch(e){toast('No se pudo guardar')}})},
 registros(B){const F=this.F=this.F||{d0:addDays(today(),-6),d1:today()};const E=entPint().filter(e=>e.fecha>=F.d0&&e.fecha<=F.d1).sort((a,b)=>(b.fecha+b.ini).localeCompare(a.fecha+a.ini));
   B.innerHTML=`<section class="panel"><div class="row"><label class="f" style="flex:0 1 160px">Desde<input type="date" id="prD" value="${F.d0}"></label><label class="f" style="flex:0 1 160px">Hasta<input type="date" id="prH" value="${F.d1}"></label></div></section>
-   <section class="panel">${E.length?`<div class="tw"><table><tr>${puedeEditReg()?bkTH():''}<th>Fecha</th><th>Horario</th><th>Registro</th><th>Pieza</th><th>Color</th><th class="n">OK</th><th class="n">Reproceso</th><th class="n">Scrap</th><th class="n">Min</th><th class="n">Pz/h</th><th>Personal</th><th>Obs.</th><th></th></tr>
+   <section class="panel">${E.length?`<div class="tw fit reg"><table><tr>${puedeEditReg()?bkTH():''}<th>Fecha</th><th>Horario</th><th>Registro</th><th>Pieza</th><th>Color</th><th class="n">OK</th><th class="n">Reproceso</th><th class="n">Scrap</th><th class="n">Min</th><th class="n">Pz/h</th><th>Personal</th><th>Obs.</th><th></th></tr>
    ${E.map(e=>`<tr>${puedeEditReg()?bkTD(e._doc+'|'+e.id):''}<td>${fmtD(e.fecha)}</td><td>${esc(e.ini)}–${esc(e.fin)}</td><td>${e.tipo==='tanda'?(e.opint_num?esc(e.opint_num):'<span class="pill lamp">fuera de plan</span>'):`<span class="pill bad">${esc(e.motivoTxt||'Parada')}</span>`}</td><td>${esc(e.pieza||'')}</td><td>${esc(e.color||'')}</td><td class="n">${e.tipo==='tanda'?nf(e.ok):''}</td><td class="n">${e.repro?nf(e.repro):''}</td><td class="n">${e.scrap||e.scraph?nf((+e.scrap||0)+(+e.scraph||0)):''}</td><td class="n">${nf(e.min)}</td><td class="n">${e.tipo==='tanda'&&e.min?nf(e.ok/(e.min/60)):''}</td>
     <td class="note">${(e.pintores||[]).map(persona).join(', ')}</td><td class="note">${esc(e.obs||'')}</td><td>${puedeEditReg()?`<button class="btn link" data-ped="${esc(e._doc)}|${esc(e.id)}">Editar</button> <button class="btn link" data-pdel="${esc(e._doc)}|${esc(e.id)}">Borrar</button>`:''}</td></tr>`).join('')}</table></div>`:'<p class="note">No hay registros en ese período.</p>'}</section>`;
   if(puedeEditReg())bindBulk(B,'registros',ids=>borrarItems(ids,mutarPint));
@@ -2916,7 +2921,7 @@ function bindOrdenesPintura(B){if(S.canPlan)bindBulk(B,'órdenes de pintura',ids
     m.querySelectorAll('[data-li]').forEach(b=>b.onclick=()=>{const {X,lib}=libres[+b.dataset.li];m.remove();modalOrdenPintura(X,lib,async(t,R,meta)=>{await crearOrdenesPintura(X,R,meta,null);toast(R.length+(R.length===1?' orden de pintura creada':' órdenes de pintura creadas'))})})}}
 
 /* ---------- línea del día de pintura ---------- */
-const stdPint=k=>+(S.M.pintura_std?.items?.[k])||null;
+const stdPint=k=>+(S.M.pintura_std?.items?.[k])||PLP.stdKey(k)||null;
 function efTanda(e){const s=stdPint(e.key);return s&&e.min?((+e.ok||0)/(e.min/60))/s:null}
 function ordenSeq(A){return A.slice().sort((a,b)=>(a.seq??1e9)-(b.seq??1e9)||(a.prioridad==='urgente'?0:1)-(b.prioridad==='urgente'?0:1)||String(a.fecha_req).localeCompare(String(b.fecha_req))||String(a.ts).localeCompare(String(b.ts)))}
 const LIN={raw(){const d=S.lineaP||{};if(d.activo&&d.tipo){if(d.tipo==='tanda')return {tandas:{[d.opint||'x']:{...d,id:d.opint||'x'}},parada:null};return {tandas:d.volver?{[d.volver.opint||'x']:{...d.volver,id:d.volver.opint||'x'}}:{},parada:{motivo:d.motivo,motivoTxt:d.motivoTxt,ini:d.ini,fecha:d.fecha}}}return {tandas:d.tandas||{},parada:d.parada||null}},
@@ -2938,7 +2943,7 @@ function htmlLineaPintura(){const curs=LIN.list();const par=LIN.parada();const h
     <span class="ln-n"><b>${nf(o.falta)}</b> faltan<br><span class="note">${s?`std ${nf(s)}/h${plan?` <button class="btn link" data-lstd="${esc(o.key)}">cambiar</button>`:''}, ≈ ${durTxt(Math.round(o.falta/s*60))}`:`sin estándar${plan?` <button class="btn link" data-lstd="${esc(o.key)}">cargar</button>`:''}`}</span></span><span class="le"></span>
     <span class="lb" data-dragid="${esc(o.id)}">${plan?`<button class="btn link" data-lmv="${esc(o.id)}|-1" title="Subir">subir</button><button class="btn link" data-lmv="${esc(o.id)}|1" title="Bajar">bajar</button>`:''}${ed?`<button class="btn sec" data-lini="${esc(o.id)}">Empezar</button>`:''}</span></div>`};
   const evo=evolucionHoras(hoy.filter(e=>e.tipo==='tanda'),'pintura',e=>+e.ok||0,e=>{const st=stdPint(e.key);return st?[(+e.ok||0)/st*60,+e.min||0]:[0,0]});
-  return htmlObjetivo(ok)+`<div class="kpis kp6"><div class="kpi"><b>${nf(ok)}</b><span>piezas OK hoy</span></div><div class="kpi"><b class="${cls(efD)}">${pct(efD)}</b><span>eficiencia del día</span></div><div class="kpi"><b>${pct1(den?re/den:null)}</b><span>reproceso</span></div><div class="kpi"><b>${pct1(den?sc/den:null)}</b><span>scrap</span></div><div class="kpi"><b>${nf(min/60,1)}</b><span>hs de cadena</span></div><div class="kpi"><b>${nf(pm)}</b><span>min de parada</span></div></div>${evo}
+  return htmlObjetivo(ok)+`<div class="kpis kp6"><div class="kpi"><b>${nf(ok)}</b><span>piezas OK hoy</span></div><div class="kpi"><b class="${cls(efD)}">${pct(efD)}</b><span>OEE del día</span></div><div class="kpi"><b>${pct1(den?re/den:null)}</b><span>reproceso</span></div><div class="kpi"><b>${pct1(den?sc/den:null)}</b><span>scrap</span></div><div class="kpi"><b>${nf(min/60,1)}</b><span>hs de cadena</span></div><div class="kpi"><b>${nf(pm)}</b><span>min de parada</span></div></div>${evo}
    <section class="panel"><div class="pzh" style="align-items:center;margin-bottom:8px"><h2 style="margin:0">Línea del día</h2>${ed&&!par?'<button class="btn sec sm" id="lnPar">Parar la cadena</button>':''}</div>
    <div class="linea">${hoy.map(filaHecha).join('')}${filaPar}${curs.map(filaCur).join('')}${pend.map(filaPend).join('')||(!curs.length?'<p class="note">No hay órdenes de pintura pendientes. Las genera Planificación.</p>':'')}</div>
    <p class="note" style="margin:10px 0 0">Puede haber más de una tanda en curso a la vez: mientras sale del horno lo último de una, ya se puede empezar a colgar la siguiente. Cada tanda tiene su Empezar y su Terminar. Si se para la cadena, las tandas en curso quedan en pausa y esos minutos no les cuentan.</p></section>`}
@@ -2972,7 +2977,8 @@ function objetivoPintura(){const c=cfgObj();const turno=Math.max(0,(diffMin(c.in
   const ids=new Set(LIN.list().map(t=>t.opint));const A=ordenSeq(opintAbiertas());const cola=[...A.filter(o=>ids.has(o.id)),...A.filter(o=>!ids.has(o.id))];
   for(const o of cola){if(rest<=0)break;const s=stdPint(o.key);if(!s)continue;const q=Math.min(o.falta,Math.floor(rest*s/60));obj+=q;rest-=q/s*60}
   const auto=Math.round(obj/50)*50;return {auto,obj:c.fijo??auto,fijo:c.fijo!=null,turno,c}}
-function htmlObjetivo(ok){const O=objetivoPintura();return barraObjetivo('pintura','Objetivo del día','piezas OK',O.obj,O.auto,ok)}
+function oeePinturaHoy(){let s=0,m=0;for(const e of entPint())if(e.fecha===today()&&e.tipo==='tanda'){const st=stdPint(e.key);if(st&&e.min){s+=(+e.ok||0)/st*60;m+=+e.min||0}}return m?s/m:null}
+function htmlObjetivo(ok){const O=objetivoPintura();const oe=oeePinturaHoy();return barraObjetivo('pintura','Objetivo del día','piezas OK',O.obj,O.auto,ok,null,null,`<span data-tip="OEE: horas estándar de las piezas OK (según el estándar u/h de cada pieza) ÷ horas de cadena de esas tandas.">OEE del día <b class="${oe==null?'':oe>=.85?'good':oe<.65?'poor':''}">${oe==null?'sin estándar':pct(oe)}</b></span>`)}
 function bindObjetivo(B){const e=$('#objEd');if(!e)return;e.onclick=()=>{const O=objetivoPintura();const c=O.c;const m=document.createElement('div');m.className='modal';
   m.innerHTML=`<div class="dlg" style="width:min(480px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Objetivo del día de pintura</h2><button class="btn link" data-x>Cerrar</button></div>
    <p class="note">Calculado según el plan: <b>${nf(O.auto)}</b> piezas. Dejalo vacío para usar el calculado.</p>
@@ -2980,21 +2986,21 @@ function bindObjetivo(B){const e=$('#objEd');if(!e)return;e.onclick=()=>{const O
    <div class="row" style="margin-top:10px"><label class="f">Inicio del turno<input type="time" id="obI" value="${esc(c.ini)}"></label><label class="f">Fin del turno<input type="time" id="obF" value="${esc(c.fin)}"></label><label class="f">Pausas (min)<input type="number" id="obP" min="0" value="${c.pausa}"></label></div>
    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" id="obGo">Guardar</button></div></div>`;
   document.body.appendChild(m);m.onclick=ev=>{if(ev.target===m||ev.target.hasAttribute('data-x'))m.remove()};
-  $('#obGo').onclick=async()=>{const d=JSON.parse(JSON.stringify(S.P.objetivos||{}));const p=d.pintura=d.pintura||{};p.ini=$('#obI').value||'06:00';p.fin=$('#obF').value||'15:00';p.pausa=parseInt($('#obP').value,10)||0;p.porDia=p.porDia||{};
+  $('#obGo').onclick=async()=>{const d=JSON.parse(JSON.stringify(S.P.objetivos||{}));const p=d.pintura=d.pintura||{};p.ini=$('#obI').value||'06:00';p.fin=$('#obF').value||'14:00';p.pausa=parseInt($('#obP').value,10)||0;p.porDia=p.porDia||{};
     const v=$('#obN').value.trim();if(v==='')delete p.porDia[today()];else p.porDia[today()]=Math.max(0,parseInt(v,10)||0);try{await S.db.doc('planificacion/objetivos').set(d);m.remove();toast('Objetivo guardado')}catch(e){toast('No se pudo guardar')}}}}
 
 /* ---------- objetivo genérico por área ---------- */
-const OBJ_DEF={taller:{ini:'06:00',fin:'15:00',pausa:30,ef:0.75},pintura:{ini:'06:00',fin:'15:00',pausa:30},armado:{ini:'06:00',fin:'14:00',pausa:30,estMin:5,refIni:'10:25',refMin:25,mesas:['Mesa 1','Mesa 2']}};
+const OBJ_DEF={taller:{ini:'06:00',fin:'14:00',pausa:30,ef:0.75},pintura:{ini:'06:00',fin:'14:00',pausa:30},armado:{ini:'06:00',fin:'14:00',pausa:30,estMin:5,refIni:'10:25',refMin:25,mesas:['Mesa 1','Mesa 2']}};
 /* pausas con horario (armado): estiramiento justo antes del refrigerio; el "a esta hora" no avanza durante las pausas */
 function bloquePausa(c){if(!c.refIni)return null;const r=toMin(c.refIni);const e=+c.estMin||0;return [r-e,r+(+c.refMin||0)]}
 function fracTurno(c,now){const i=toMin(c.ini),f=toMin(c.fin);if(now==null)now=toMin(ahora());if(now<=i)return 0;if(now>=f)return 1;const b=bloquePausa(c);if(!b)return (now-i)/(f-i);
   const ov=(x,y)=>Math.max(0,Math.min(y,b[1])-Math.max(x,b[0]));const tot=(f-i)-ov(i,f);const el=(now-i)-ov(i,now);return tot>0?Math.max(0,Math.min(1,el/tot)):0}
-function cfgA(a){const c={...OBJ_DEF[a],...(S.P.objetivos?.[a]||{})};if(c.refIni)c.pausa=(+c.estMin||0)+(+c.refMin||0);c.fijo=(a==='armado'?c.porDiaUS:c.porDia)?.[today()]??null;return c}
-function objArmUS(c){const R=GR.calc();const auto=Math.round(R.objDay||0);const obj=c.fijo??auto;const fr=R.objDay>0?Math.max(0,Math.min(1,R.objNow/R.objDay)):fracTurno(c);return {auto,obj,ok:R.usHoy,fr}}
-function barraObjetivo(a,titulo,unid,obj,auto,ok,fmt,frc){const c=cfgA(a);fmt=fmt||(x=>nf(x));const frac=frc!=null?frc:fracTurno(c);const esp=obj*frac;const r=obj?ok/obj:0;const dif=ok-esp;
+function cfgA(a){const c={...OBJ_DEF[a],...(S.P.objetivos?.[a]||{})};if(c.fin==='15:00')c.fin='14:00';if(c.refIni)c.pausa=(+c.estMin||0)+(+c.refMin||0);c.fijo=(a==='armado'?c.porDiaUS:c.porDia)?.[today()]??null;return c}
+function objArmUS(c){const R=GR.calc();const auto=Math.round(R.objDay||0);const obj=c.fijo??auto;const fr=R.objDay>0?Math.max(0,Math.min(1,R.objNow/R.objDay)):fracTurno(c);const pin=R.L.filter(l=>l.pint).reduce((a,l)=>a+l.us,0);return {auto,obj,ok:R.usHoy,fr,pin}}
+function barraObjetivo(a,titulo,unid,obj,auto,ok,fmt,frc,extra){const c=cfgA(a);fmt=fmt||(x=>nf(x));const frac=frc!=null?frc:fracTurno(c);const esp=obj*frac;const r=obj?ok/obj:0;const dif=ok-esp;
   return `<section class="panel obj"><div class="pzh" style="align-items:baseline;flex-wrap:wrap;gap:8px"><span><b style="font-size:17px">${titulo}: ${fmt(obj)} ${unid}</b> <span class="note">${c.fijo!=null?'fijado por Planificación':a==='armado'?'umbral del día según Objetivo':'calculado según el plan'}, turno ${esc(c.ini)} a ${esc(c.fin)}</span></span>${S.canPlan?`<button class="btn link" data-objed="${a}" data-auto="${auto}">cambiar</button>`:''}</div>
    <div class="objbar"><i style="width:${Math.min(100,r*100)}%" class="${dif>=0?'ok':'atr'}"></i><b style="left:${frac*100}%" title="A esta hora"></b></div>
-   <div class="pzh" style="font-size:14px;flex-wrap:wrap;gap:6px"><span>Llevan <b>${fmt(ok)}</b> (${pct(r)})</span><span>A esta hora deberían ir <b>${fmt(esp)}</b></span><span class="${dif>=0?'good':'poor'}"><b>${dif>=0?'+':''}${fmt(dif)}</b> ${dif>=0?'adelantados':'atrasados'}</span><span>Faltan <b>${fmt(Math.max(0,obj-ok))}</b></span></div></section>`}
+   <div class="pzh" style="font-size:14px;flex-wrap:wrap;gap:6px"><span>Llevan <b>${fmt(ok)}</b> (${pct(r)})</span>${extra||''}<span>A esta hora deberían ir <b>${fmt(esp)}</b></span><span class="${dif>=0?'good':'poor'}"><b>${dif>=0?'+':''}${fmt(dif)}</b> ${dif>=0?'adelantados':'atrasados'}</span><span>Faltan <b>${fmt(Math.max(0,obj-ok))}</b></span></div></section>`}
 function bindObjetivoGen(B){B.querySelectorAll('[data-objed]').forEach(e=>e.onclick=()=>{const a=e.dataset.objed;const c=cfgA(a);const auto=+e.dataset.auto;const m=document.createElement('div');m.className='modal';
   m.innerHTML=`<div class="dlg" style="width:min(500px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Objetivo del día: ${AREAS_PL[a]}</h2><button class="btn link" data-x>Cerrar</button></div>
    <p class="note">${a==='armado'?'Umbral del día según Objetivo':'Calculado según el plan'}: <b>${nf(auto,a==='taller'?1:0)}</b>${a==='armado'?' unidades spot':''}. Dejalo vacío para usar el calculado.</p><label class="f">Objetivo de hoy${a==='armado'?' (unidades spot)':''}<input type="number" id="ogN" min="0" step="any" value="${c.fijo??''}"></label>
@@ -3003,7 +3009,7 @@ function bindObjetivoGen(B){B.querySelectorAll('[data-objed]').forEach(e=>e.oncl
    ${a==='armado'?`<label class="f" style="margin-top:10px">Mesas (separadas por coma)<input id="ogM" value="${esc((c.mesas||[]).join(', '))}"></label>`:''}${a==='armado'?`<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px"><input type="checkbox" id="ogCS" ${c.controlStock!==false?'checked':''} style="width:auto"> Avisar al terminar si no alcanzan las piezas registradas en armado</label>`:''}
    <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" id="ogGo">Guardar</button></div></div>`;
   document.body.appendChild(m);m.onclick=ev=>{if(ev.target===m||ev.target.hasAttribute('data-x'))m.remove()};
-  $('#ogGo').onclick=async()=>{const d=JSON.parse(JSON.stringify(S.P.objetivos||{}));const p=d[a]=d[a]||{};p.ini=$('#ogI').value||'06:00';p.fin=$('#ogF').value||(a==='armado'?'14:00':'15:00');if($('#ogP'))p.pausa=parseInt($('#ogP').value,10)||0;if($('#ogRI')){p.refIni=$('#ogRI').value||'10:25';p.refMin=Math.max(0,parseInt($('#ogRM').value,10)||0);p.estMin=Math.max(0,parseInt($('#ogEs').value,10)||0);p.pausa=p.refMin+p.estMin}const kD=a==='armado'?'porDiaUS':'porDia';p[kD]=p[kD]||{};
+  $('#ogGo').onclick=async()=>{const d=JSON.parse(JSON.stringify(S.P.objetivos||{}));const p=d[a]=d[a]||{};p.ini=$('#ogI').value||'06:00';p.fin=$('#ogF').value||'14:00';if($('#ogP'))p.pausa=parseInt($('#ogP').value,10)||0;if($('#ogRI')){p.refIni=$('#ogRI').value||'10:25';p.refMin=Math.max(0,parseInt($('#ogRM').value,10)||0);p.estMin=Math.max(0,parseInt($('#ogEs').value,10)||0);p.pausa=p.refMin+p.estMin}const kD=a==='armado'?'porDiaUS':'porDia';p[kD]=p[kD]||{};
     const v=$('#ogN').value.trim();if(v==='')delete p[kD][today()];else p[kD][today()]=Math.max(0,parseFloat(v)||0);const ef=$('#ogE');if(ef)p.ef=Math.max(.01,(parseFloat(ef.value)||75)/100);const ms=$('#ogM');if(ms)p.mesas=ms.value.split(',').map(x=>x.trim()).filter(Boolean);const cs=$('#ogCS');if(cs)p.controlStock=cs.checked;
     try{await S.db.doc('planificacion/objetivos').set(d);m.remove();toast('Guardado')}catch(e){toast('No se pudo guardar')}}})}
 function evolucionHoras(items,a,valor,efFn){const c=cfgA(a);const h0=Math.floor(toMin(c.ini)/60),h1=Math.ceil(toMin(c.fin)/60);const H=[];for(let h=h0;h<h1;h++)H.push({h,v:0,s:0,r:0});
@@ -3063,6 +3069,137 @@ function oarmAbiertas(){const h=oarmHecho();return ordenSeq((S.oarm||[]).filter(
 function hhDe(e){return e.hh!=null?+e.hh:Math.max(1,(e.personas||[]).length||+e.npers||1)*(+e.min||0)/60}
 function efArm(e){const s=stdArm(e.code);const hh=hhDe(e);return s&&hh?(+e.qty||0)/(s*hh):null}
 /* ---------- plan de armado por línea (importado del Excel de programación) ---------- */
+/* ---------- plan de pintura (Programación Pintura: hoja PLAN Pintura) ---------- */
+const PLP={
+data(){return S.P.pintura_plan||{items:[]}},sel:new Set(),
+/* piezas que salen de pintura ya armadas: código del Objetivo (GR_STD) por producto y color */
+grSug(prod,color){const tk=String(prod||'').toUpperCase().replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);if(!tk.length)return null;const c=nrm(color);
+  const cand=[];for(const [k,v] of Object.entries(GR_STD)){const d=String(v[3]||'').toUpperCase();const dt=d.replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);
+    if(!tk.every(t=>dt.some(x=>x===t||x.startsWith(t))))continue;if(c&&!String(color).toUpperCase().split('/').every(w=>{const q=nrm(w).slice(0,4);return !q||nrm(d).includes(q)}))continue;
+    let p=d.length;if(/ACERO|CRUDA|CRUDO|MADERA|CENCO|\(ML\)|CON TUBO/.test(d))p+=100;cand.push([p,k])}
+  cand.sort((a,b)=>a[0]-b[0]);return cand[0]?.[1]||null},
+usDe(code){const st=GR.std(String(code||'').toUpperCase());return st?(st[0]+st[1]+st[2])/GR.c().minUS:null},
+/* pieza del panel que corresponde al renglón: artículo y pieza del maestro, o el texto del plan */
+keyDe(prod,parte){const P=S.M.productos?.items||{};const fa=Object.keys(P).find(f=>nrm(f)===nrm(prod));if(fa){const p=(P[fa].piezas||[]).find(x=>nrm(x.pieza)===nrm(parte));if(p)return {key:pzKey(fa,p,compartidas(),true),maestro:true}}
+  return {key:String(prod).toUpperCase()+'|'+String(parte).toUpperCase(),maestro:false}},
+leer(wb){const cal={feriados:[],sabados:[]};let hsDia=null;const T={};
+  const hoja=wb.SheetNames.find(n=>nrm(n)==='PLANPINTURA')||wb.SheetNames.find(n=>nrm(n).startsWith('PLANPINTURA'));
+  for(const sn of wb.SheetNames){const A=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null,raw:true});
+    if(nrm(sn)==='CALENDARIO'){const H=(A[0]||[]).map(nrm);const iF=H.indexOf('FERIADOS'),iS=H.indexOf('SABADOS'),iH=H.indexOf('HORASHABILES');for(const r of A.slice(1)){if(iF>=0){const d=PLA.iso(r[iF]);if(d)cal.feriados.push(d)}if(iS>=0){const d=PLA.iso(r[iS]);if(d)cal.sabados.push(d)}if(iH>=0&&hsDia==null&&+r[iH]>0)hsDia=+r[iH]}}
+    if(nrm(sn)==='TIEMPOS'){const H=(A[0]||[]).map(nrm);const iA=H.indexOf('ARTICULO'),iP=H.findIndex(x=>x.startsWith('PARTE')),iC=H.findIndex(x=>x.startsWith('CANTXHORA'));if(iA>=0&&iP>=0&&iC>=0)for(const r of A.slice(1))if(+r[iC]>0)T[nrm(r[iA])+'|'+nrm(r[iP])]=+r[iC]}}
+  if(!hoja)return null;const A=XLSX.utils.sheet_to_json(wb.Sheets[hoja],{header:1,defval:null,raw:true});
+  let h=-1;for(let i=0;i<Math.min(15,A.length);i++){const r=(A[i]||[]).map(nrm);if(r.includes('PRODUCTO')&&r.some(x=>x.startsWith('CANT'))){h=i;break}}if(h<0)return null;
+  const H=A[h].map(nrm);const col=f=>H.findIndex(f);const cP=col(x=>x==='PRODUCTO'),cT=col(x=>x.startsWith('PARTE')),cK=col(x=>x==='COLOR'),cC=col(x=>x.startsWith('CANT')),cR=col(x=>x==='REALIZADO'),cF=col(x=>x==='FECHA'),cS=col(x=>x.startsWith('STD'));
+  let cO=col(x=>x.startsWith('OBS'));if(cO<0&&cP>0)cO=0;
+  let oee=1,ini=null;for(const r of A.slice(0,h))for(let j=0;j<(r||[]).length;j++){const k=nrm(r[j]);const nx=(r.slice(j+1).find(v=>v!=null&&v!==''));if(k.startsWith('OEE')&&+nx>0)oee=+nx;else if(k.startsWith('DIAINICIAL'))ini=PLA.iso(nx)}
+  const items=[];let hechas=0;
+  for(const r of A.slice(h+1)){const prod=String(r[cP]??'').trim();const q=+r[cC];if(!prod||nrm(prod)==='PRODUCTO'||!(q>0))continue;const re=nrm(cR>=0?r[cR]:'');if(re==='SI'){hechas++;continue}
+    const parte=String(r[cT]??'').trim(),color=String(r[cK]??'').trim().toUpperCase(),obs=cO>=0?String(r[cO]??'').trim():'';const st=cS>=0&&+r[cS]>0?+r[cS]:(T[nrm(prod)+'|'+nrm(parte)]||null);
+    const armada=/SALEN\s*DE\s*PINTURA/i.test(obs);const K=this.keyDe(prod,parte);
+    items.push({id:newId(),prod:prod.toUpperCase(),parte:parte.toUpperCase(),color,cant:q,std:st,obs,fecha:cF>=0?PLA.iso(r[cF]):null,armada,us_code:armada?this.grSug(prod,color):null,key:K.key,maestro:K.maestro})}
+  return {hoja,oee,ini,hsDia,items,hechas,cal,tiempos:T}},
+async importar(f){const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});const R=this.leer(wb);
+  if(!R){toast('No encontré la hoja PLAN Pintura con columnas Producto y Cantidad');return}
+  const arm=R.items.filter(i=>i.armada);const sinUS=arm.filter(i=>!i.us_code);
+  if(!confirm(`Se va a cargar el plan de pintura (hoja ${R.hoja}):\n\n${R.items.length} renglones pendientes (${R.hechas} ya realizados, no se traen)\n${arm.length} salen de pintura ya armados${sinUS.length?` (${sinUS.length} sin código de unidades spot: se vinculan después)`:''}\n\n${this.data().items?.length?'Reemplaza el plan de pintura cargado antes. ':''}¿Continuar?`))return;
+  const cur=this.data();
+  await this.guardar({items:R.items,oee:R.oee||1,ini:R.ini||today(),hora:cur.hora??(toMin(cfgA('pintura').ini)/60),hsDia:R.hsDia||cur.hsDia||7.5,cal:R.cal.feriados.length||R.cal.sabados.length?R.cal:(cur.cal||{feriados:[],sabados:[]}),importado:new Date().toISOString(),archivo:f.name,hoja:R.hoja});toast('Plan de pintura cargado')},
+guardar(d){return S.db.doc('planificacion/pintura_plan').set(JSON.parse(JSON.stringify(d)))},
+async mut(fn){const d=JSON.parse(JSON.stringify(this.data()));d.items=d.items||[];fn(d);try{await this.guardar(d)}catch(e){toast('No se pudo guardar')}},
+std(it){return it.std||+(S.M.pintura_std?.items?.[it.key])||null},
+stdKey(k){if(!k)return null;for(const it of this.data().items||[])if(it.key===k&&it.std)return it.std;return null},
+/* renglón del plan de una orden de pintura (para las que salen armadas) */
+itemDeOpint(id){return (this.data().items||[]).find(i=>i.opint===id)||null},
+armadaDeTanda(e){if(e.tipo!=='tanda'||!e.opint)return null;const it=this.itemDeOpint(e.opint);const o=(S.opint||[]).find(x=>x.id===e.opint);const armada=it?it.armada:o?.armada;const code=(it&&it.us_code)||o?.us_code;return armada&&code?code:null},
+/* avance: lo pintado OK desde que se cargó el plan, por orden de pintura creada desde el renglón o por pieza y color */
+avance(desde){const pp=pintadoPorOrden();const its=this.data().items||[];const lig=new Set(its.map(i=>i.opint).filter(Boolean));const pool={};
+  for(const e of entPint())if(e.tipo==='tanda'&&e.fecha>=desde&&!(e.opint&&lig.has(e.opint))){const k=e.key+'·'+nrm(e.color);pool[k]=(pool[k]||0)+(+e.ok||0)}
+  const out={};for(const it of its){if(it.hecho){out[it.id]=it.cant;continue}let h=0;if(it.opint)h=(it.base||0)+(pp[it.opint]?.ok||0);else{const k=it.key+'·'+nrm(it.color);const p=pool[k]||0;h=Math.min(p,it.cant);pool[k]=p-h}out[it.id]=h}return out},
+agenda(D,av){return PLA.agenda({items:(D.items||[]).map(i=>({...i,std:this.std(i),dot:1})),hsDia:D.hsDia,hora:D.hora,oee:D.oee,ini:D.ini},av,D.cal||{feriados:[],sabados:[]})},
+render(B){const D=this.data();const ed=S.canPlan;const its=D.items||[];const desde=(D.importado||'').slice(0,10)||today();
+  const cab=`<section class="panel filt"><div class="row" style="justify-content:space-between;align-items:center"><p class="note" style="margin:0">${D.importado?`Cargado el ${fmtD(D.importado.slice(0,10))}/${D.importado.slice(0,4)}${D.archivo?' desde <b>'+esc(D.archivo)+'</b>':''} (hoja ${esc(D.hoja||'PLAN Pintura')}). El avance se toma de las tandas OK registradas desde esa fecha (por la orden de pintura creada desde el renglón, o por pieza y color); también podés marcar un renglón como hecho.`:'Subí el Excel de programación de pintura (Programación Pintura). Se lee la hoja <b>PLAN Pintura</b>: los renglones con REALIZADO distinto de SI. Los que tienen “SALEN DE PINTURA” en la observación salen ya armados y suman unidades spot al Objetivo de armado.'}</p>
+    ${ed?`<label class="btn sm" style="cursor:pointer;flex:0 0 auto">Subir Excel del plan<input type="file" id="plpF" accept=".xlsx,.xlsm,.xls" style="display:none"></label>`:''}</div></section>`;
+  if(!its.length){B.innerHTML=cab+'<section class="panel"><p class="note">Todavía no hay un plan de pintura cargado.</p></section>';this.bind(B);return}
+  const av=this.avance(desde);const ag=this.agenda(D,av);const pend=its.filter(i=>!i.hecho&&ag.R[i.id].falta>0);const listos=its.filter(i=>!pend.includes(i));
+  const und=pend.reduce((a,i)=>a+ag.R[i.id].falta,0);const OP=Object.fromEntries((S.opint||[]).map(o=>[o.id,o]));
+  const usP=pend.filter(i=>i.armada).reduce((a,i)=>a+ag.R[i.id].falta*(this.usDe(i.us_code)||0),0);
+  const puedeOrden=it=>!it.opint&&!it.hecho&&ag.R[it.id].falta>0&&it.color;for(const id of [...this.sel])if(!its.some(i=>i.id===id&&puedeOrden(i)))this.sel.delete(id);
+  const fila=(it,k)=>{const r=ag.R[it.id];const h=av[it.id]||0;const s=this.std(it);const o=it.opint?OP[it.opint]:null;const vivo=!it.hecho&&r.falta>0;const us=it.armada?this.usDe(it.us_code):null;
+    return `<tr${it.hecho||!r.falta?' class="off"':''}${ed&&vivo?` draggable="true" data-ppdr="${esc(it.id)}"`:''}>
+    ${ed?`<td style="white-space:nowrap">${vivo?'<span class="note" title="Arrastrá para mover" style="cursor:grab;user-select:none;font-size:16px;padding:0 4px">⠿</span>':''}${puedeOrden(it)?`<input type="checkbox" data-ppsel="${esc(it.id)}" ${this.sel.has(it.id)?'checked':''} style="width:auto" title="Seleccionar para crear la orden de pintura">`:''}</td>`:''}<td class="n">${k+1}</td>
+    <td><b>${esc(it.prod)}</b> ${esc(it.parte)}${it.maestro?'':' <span class="pill" title="No está en el maestro de productos con ese nombre: la orden se crea con el texto del plan. Podés vincularla a una pieza del maestro.">sin maestro</span>'}${o?`<br><span class="pill">${esc(o.numero)}</span>`:''}</td>
+    <td><span class="pill">${esc(it.color||'sin color')}</span></td>
+    <td class="n">${ed?`<input type="number" min="1" value="${it.cant}" data-ppq="${esc(it.id)}" style="width:76px;text-align:right">`:nf(it.cant)}</td>
+    <td class="n">${h?`<b class="${h>=it.cant?'good':''}">${nf(h)}</b>`:'<span class="note">0</span>'}</td>
+    <td class="n">${s?nf(s):'<span class="pill bad">s/std</span>'}</td><td class="n">${r.falta&&!r.sinStd?nf(r.hs,2):''}</td>
+    <td>${r.ini?`${fmtD(r.ini.f)} ${r.ini.h}`:''}</td><td>${r.fin?`<b>${fmtD(r.fin.f)}</b> ${r.fin.h}`:(it.hecho?'<span class="pill ok">hecho</span>':'<span class="pill ok">completo</span>')}</td>
+    <td>${ed?`<label class="note" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" data-ppa="${esc(it.id)}" ${it.armada?'checked':''} style="width:auto"> sale armada</label>`:(it.armada?'<span class="pill lamp">sale armada</span>':'')}
+      ${it.armada?(it.us_code?`<span class="note">${esc(it.us_code)} · ${nf(us,2)} US</span>`:'<span class="pill bad">sin código US</span>')+(ed?` <button class="btn link" data-ppus="${esc(it.id)}">${it.us_code?'cambiar':'vincular'}</button>`:''):''}</td>
+    <td>${ed?`<input value="${esc(it.obs||'')}" data-ppo="${esc(it.id)}" placeholder="—" style="min-width:110px">`:esc(it.obs||'')}</td>
+    <td style="min-width:120px">${ed?`${vivo?`<button class="btn link" data-ppm="${esc(it.id)}.-1">subir</button><button class="btn link" data-ppm="${esc(it.id)}.1">bajar</button>`:''}${puedeOrden(it)?`<button class="btn link" data-ppor="${esc(it.id)}" title="Crear la orden de pintura para que aparezca en la línea">orden</button>`:''}${!it.opint?`<button class="btn link" data-ppvin="${esc(it.id)}" title="Elegir la pieza del maestro">pieza</button>`:''}<button class="btn link" data-pph="${esc(it.id)}">${it.hecho?'reabrir':'hecho'}</button><button class="btn link" data-ppx="${esc(it.id)}">quitar</button>`:''}</td></tr>`};
+  const thead=`<tr>${ed?'<th></th>':''}<th class="n">#</th><th>Producto / parte</th><th>Color</th><th class="n">Cant.</th><th class="n">Pintado</th><th class="n">Std u/h</th><th class="n">Hs</th><th>Inicio</th><th>Fin</th><th>Sale armada</th><th>Obs.</th><th></th></tr>`;
+  B.innerHTML=cab+`<section class="panel"><div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="kpi"><b>${pend.length}</b><span>renglones pendientes</span></div><div class="kpi"><b>${nf(und)}</b><span>piezas por pintar</span></div><div class="kpi"><b>${nf(usP)}</b><span>unidades spot que salen armadas</span></div><div class="kpi"><b>${nf(ag.tot,1)}</b><span>horas de cadena</span></div><div class="kpi"><b>${fmtD(ag.fin.f)}</b><span>fin estimado, ${ag.fin.h}</span></div></div>
+   ${ed?`<div class="row" style="margin:6px 0 12px;align-items:flex-end"><label class="f" style="flex:0 1 150px">Arranca<input type="date" id="plpI" value="${esc(D.ini||today())}"></label><label class="f" style="flex:0 1 90px">Hora inicio<input type="number" min="0" max="23" step="0.5" id="plpH" value="${D.hora??6}"></label><label class="f" style="flex:0 1 90px">Hs por día<input type="number" min="1" max="24" step="0.05" id="plpD" value="${D.hsDia||7.5}"></label><label class="f" style="flex:0 1 90px" title="Rendimiento de la cadena: 1 = al estándar">OEE<input type="number" min="0.1" step="0.05" id="plpO" value="${D.oee||1}"></label></div>`:''}
+   <p class="note" style="margin:0 0 8px">Horas = piezas que faltan ÷ (estándar u/h × OEE). El orden de la tabla es el orden de la cadena; se calcula desde ahora con ${nf(+D.hsDia||7.5,2)} hs por día hábil. Las que <b>salen armadas</b> suman al Objetivo de armado las unidades spot de su código (las mismas de la base del Objetivo) cuando se registra la tanda de su orden de pintura.</p>
+   ${ed&&pend.some(puedeOrden)?`<div class="row" style="margin:0 0 8px;align-items:center;gap:10px"><label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="ppSelAll" style="width:auto" ${pend.filter(puedeOrden).every(i=>this.sel.has(i.id))?'checked':''}> Seleccionar todos los que no tienen orden (${pend.filter(puedeOrden).length})</label><button class="btn sm" id="ppOrdSel" ${this.sel.size?'':'disabled'}>Crear órdenes de pintura de los seleccionados (${this.sel.size})</button></div>`:''}
+   ${(()=>{const sv=pend.filter(i=>i.armada&&!i.us_code);return sv.length?`<p class="note poor" style="margin:0 0 10px">${sv.length===1?'1 renglón que sale armado no tiene':sv.length+' renglones que salen armados no tienen'} código de unidades spot: ${sv.slice(0,10).map(i=>esc(i.prod+' '+i.color)).join(', ')}. ${ed?'Tocá <b>vincular</b>.':''}</p>`:''})()}
+   ${pend.length?`<div class="tw fit"><table>${thead}${pend.map(fila).join('')}</table></div>`:'<p class="note">No quedan renglones pendientes.</p>'}
+   ${listos.length?`<details style="margin-top:12px"><summary class="note">${listos.length} renglones terminados</summary><div class="tw"><table>${listos.map(fila).join('')}</table></div></details>`:''}</section>`;
+  this.bind(B)},
+bind(B){const f=$('#plpF');if(f)f.onchange=async()=>{const x=f.files[0];f.value='';if(!x)return;try{await this.importar(x)}catch(e){console.error(e);toast('No se pudo leer el Excel. Si tiene contraseña, guardalo sin clave.')}};
+  const D=this.data();if(!(D.items||[]).length)return;
+  const set=(sel,fn)=>{const e=$(sel);if(e)e.onchange=()=>this.mut(d=>fn(d,e.value))};
+  set('#plpI',(d,v)=>d.ini=v||today());set('#plpH',(d,v)=>d.hora=Math.max(0,Math.min(23.5,+v||6)));set('#plpD',(d,v)=>d.hsDia=Math.max(1,+v||7.5));set('#plpO',(d,v)=>d.oee=Math.max(0.1,+v||1));
+  const it=(d,id)=>d.items.find(i=>i.id===id);
+  B.querySelectorAll('[data-ppq]').forEach(e=>e.onchange=()=>{const v=parseInt(e.value,10);if(!(v>0)){toast('Cantidad inválida');return}this.mut(d=>it(d,e.dataset.ppq).cant=v)});
+  B.querySelectorAll('[data-ppo]').forEach(e=>e.onchange=()=>this.mut(d=>it(d,e.dataset.ppo).obs=e.value.trim()));
+  B.querySelectorAll('[data-ppa]').forEach(e=>e.onchange=()=>this.mut(d=>{const x=it(d,e.dataset.ppa);x.armada=e.checked;if(x.armada&&!x.us_code)x.us_code=this.grSug(x.prod,x.color)}));
+  B.querySelectorAll('[data-pph]').forEach(b=>b.onclick=()=>this.mut(d=>{const x=it(d,b.dataset.pph);x.hecho=!x.hecho;x.hechoTs=x.hecho?new Date().toISOString():null}));
+  B.querySelectorAll('[data-ppx]').forEach(b=>b.onclick=()=>{if(confirm('¿Quitar este renglón del plan?'))this.mut(d=>{d.items=d.items.filter(i=>i.id!==b.dataset.ppx)})});
+  B.querySelectorAll('[data-ppm]').forEach(b=>b.onclick=()=>{const [id,dd]=b.dataset.ppm.split('.');this.mut(d=>{const i=d.items.findIndex(x=>x.id===id);let j=i+(+dd);while(j>=0&&j<d.items.length&&d.items[j].hecho)j+=(+dd);if(i<0||j<0||j>=d.items.length)return;const [x]=d.items.splice(i,1);d.items.splice(j,0,x)})});
+  B.querySelectorAll('[data-ppor]').forEach(b=>b.onclick=()=>this.crearOrdenes([b.dataset.ppor],B));
+  B.querySelectorAll('[data-ppsel]').forEach(c=>c.onchange=()=>{c.checked?this.sel.add(c.dataset.ppsel):this.sel.delete(c.dataset.ppsel);this.render(B)});
+  {const a=$('#ppSelAll');if(a)a.onchange=()=>{B.querySelectorAll('[data-ppsel]').forEach(c=>{if(c.closest('details'))return;a.checked?this.sel.add(c.dataset.ppsel):this.sel.delete(c.dataset.ppsel)});this.render(B)}}
+  {const g=$('#ppOrdSel');if(g)g.onclick=()=>this.crearOrdenes([...this.sel],B)}
+  B.querySelectorAll('[data-ppus]').forEach(b=>b.onclick=()=>this.vincularUS(b.dataset.ppus));
+  B.querySelectorAll('[data-ppvin]').forEach(b=>b.onclick=()=>this.vincularPieza(b.dataset.ppvin));
+  let drg=null;B.querySelectorAll('[data-ppdr]').forEach(tr=>{tr.addEventListener('dragstart',e=>{drg=tr.dataset.ppdr;tr.style.opacity='.4';try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',drg)}catch(x){}});
+    tr.addEventListener('dragend',()=>{tr.style.opacity='';B.querySelectorAll('[data-ppdr]').forEach(t=>t.style.boxShadow='')});
+    tr.addEventListener('dragover',e=>{if(!drg||drg===tr.dataset.ppdr)return;e.preventDefault();const r=tr.getBoundingClientRect();const abajo=e.clientY>r.top+r.height/2;B.querySelectorAll('[data-ppdr]').forEach(t=>t.style.boxShadow='');tr.style.boxShadow=abajo?'inset 0 -3px 0 var(--lamp)':'inset 0 3px 0 var(--lamp)'});
+    tr.addEventListener('drop',e=>{e.preventDefault();const src=drg;drg=null;const dst=tr.dataset.ppdr;if(!src||src===dst)return;const r=tr.getBoundingClientRect();const abajo=e.clientY>r.top+r.height/2;
+      this.mut(d=>{const i=d.items.findIndex(x=>x.id===src);if(i<0)return;const [x]=d.items.splice(i,1);let j=d.items.findIndex(y=>y.id===dst);if(j<0){d.items.splice(i,0,x);return}d.items.splice(abajo?j+1:j,0,x)})})})},
+vincularUS(iid){const x=(this.data().items||[]).find(i=>i.id===iid);if(!x||!S.canPlan)return;const sug=this.grSug(x.prod,x.color);const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="dlg" style="width:min(560px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Unidades spot de ${esc(x.prod)} ${esc(x.color)}</h2><button class="btn link" data-x>Cerrar</button></div>
+   <p class="note">Elegí el código de la base del Objetivo (tiempos T + P + A). Cada pieza OK de esta orden suma esas unidades spot al Objetivo de armado del día.</p>
+   <label class="f">Código<input id="puC" list="puL" value="${esc(x.us_code||sug||'')}" autocomplete="off"></label><datalist id="puL">${Object.entries(GR_STD).map(([k,v])=>`<option value="${esc(k)}">${esc(v[3])}</option>`).join('')}</datalist>
+   <p class="note" id="puD"></p><div class="err" id="puE"></div><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" id="puGo">Guardar</button></div></div>`;
+  document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
+  const show=()=>{const c=$('#puC').value.trim().toUpperCase();const st=GR.std(c);$('#puD').textContent=st?`${st[3]} · ${nf(this.usDe(c),2)} unidades spot por pieza`:'Ese código no está en la base del Objetivo.'};$('#puC').oninput=show;show();
+  $('#puGo').onclick=async()=>{const c=$('#puC').value.trim().toUpperCase();if(c&&!GR.std(c)){$('#puE').textContent='Ese código no está en la base del Objetivo.';return}
+    await this.mut(d=>{const y=d.items.find(i=>i.id===iid);if(y)y.us_code=c||null});if(x.opint){try{const o=(S.opint||[]).find(z=>z.id===x.opint);if(o)await S.db.collection('opint').doc(o.id).set({...o,armada:!!x.armada,us_code:c||null})}catch(e){}}m.remove();toast('Guardado')}},
+vincularPieza(iid){const x=(this.data().items||[]).find(i=>i.id===iid);if(!x||!S.canPlan)return;const P=S.M.productos?.items||{};const fams=Object.keys(P).sort((a,b)=>a.localeCompare(b,'es',{numeric:true}));const [a0,p0]=x.maestro?String(x.key).split('|'):[fams.find(f=>nrm(f)===nrm(x.prod))||'',''];
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="dlg" style="width:min(520px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Pieza de ${esc(x.prod)} ${esc(x.parte)}</h2><button class="btn link" data-x>Cerrar</button></div>
+   <p class="note">Elegí el artículo y la pieza del maestro, así la orden de pintura descuenta las piezas crudas que mandó el taller. Si la dejás sin vincular, la orden usa el texto del plan.</p>
+   <div class="row"><label class="f">Artículo<input id="pvA" list="pvAL" value="${esc(a0||'')}" autocomplete="off"></label><datalist id="pvAL">${fams.map(f=>`<option value="${esc(f)}">`).join('')}</datalist><label class="f">Pieza<select id="pvP"></select></label></div><div class="err" id="pvE"></div>
+   <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn sec" id="pvT">Usar el texto del plan</button><button class="btn" id="pvGo">Vincular</button></div></div>`;
+  document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
+  const fill=()=>{const f=P[$('#pvA').value.trim()];$('#pvP').innerHTML=f?f.piezas.map(p=>`<option ${nrm(p.pieza)===nrm(p0||x.parte)?'selected':''}>${esc(p.pieza)}</option>`).join(''):''};$('#pvA').oninput=fill;fill();
+  $('#pvT').onclick=async()=>{await this.mut(d=>{const y=d.items.find(i=>i.id===iid);if(y){y.key=y.prod+'|'+y.parte;y.maestro=false}});m.remove()};
+  $('#pvGo').onclick=async()=>{const fa=$('#pvA').value.trim();const f=P[fa];const p=f?.piezas.find(z=>z.pieza===$('#pvP').value);if(!p){$('#pvE').textContent='Elegí artículo y pieza del maestro.';return}
+    const k=pzKey(fa,p,compartidas(),true);await this.mut(d=>{const y=d.items.find(i=>i.id===iid);if(y){y.key=k;y.maestro=true}});m.remove();toast('Pieza vinculada')}},
+async crearOrdenes(ids,B){const D=this.data();const av=this.avance((D.importado||'').slice(0,10)||today());const ag=this.agenda(D,av);
+  const X=ids.map(id=>(D.items||[]).find(i=>i.id===id)).filter(x=>x&&!x.opint&&!x.hecho&&x.color&&x.cant-(av[x.id]||0)>0);if(!X.length){toast('No hay renglones para crear órdenes (revisá que tengan color)');return}
+  const det=X.slice(0,15).map(x=>`${x.prod} ${x.parte} ${x.color}: ${nf(x.cant-(av[x.id]||0))}${x.armada?' (sale armada)':''}, requerida ${fmtD(ag.R[x.id]?.fin?.f||today())}`).join('\n');
+  if(!confirm(`Crear ${X.length===1?'la orden':X.length+' órdenes'} de pintura:\n\n${det}${X.length>15?'\n…':''}\n\nLa fecha requerida es el fin estimado del renglón en el plan.`))return;
+  let n=opintNextNum();const hechas={};
+  try{for(const x of X){const id='pin-'+newId();const inf=infoKey(x.key);const q=Math.max(1,x.cant-(av[x.id]||0));
+      await S.db.collection('opint').doc(id).set({id,numero:'PIN-'+String(n++).padStart(4,'0'),key:x.key,pieza:x.maestro?inf.pieza:x.prod+' '+x.parte,codigo:inf.codigo||null,arts:x.maestro?(inf.arts||[]):[x.prod],color:x.color,cant:q,prioridad:/PRIORIDAD|URGEN/i.test(x.obs||'')?'urgente':'normal',fecha_req:ag.R[x.id]?.fin?.f||today(),obs:x.obs||'',armada:!!x.armada,us_code:x.us_code||null,plp:x.id,estado:'abierta',ts:new Date().toISOString(),por:S.uid||null});hechas[x.id]={id,base:av[x.id]||0}}}
+  catch(e){toast('Falló una orden; se crearon '+Object.keys(hechas).length)}
+  if(Object.keys(hechas).length){await this.mut(d=>{for(const [iid,h] of Object.entries(hechas)){const y=d.items.find(i=>i.id===iid);if(y){y.opint=h.id;y.base=h.base}}});for(const k of Object.keys(hechas))this.sel.delete(k);
+    toast(Object.keys(hechas).length===1?'Orden de pintura creada':Object.keys(hechas).length+' órdenes de pintura creadas');if(B)this.render(B)}}
+};
+
 const PLA={
 data(){const d=S.P.armado_plan||{lineas:[]};return {...d,lineas:(d.lineas||[]).filter(l=>l.id!=='pintura')}},sel:new Set(),
 iso(d){if(d instanceof Date&&!isNaN(d)){const x=new Date(d.getTime()+12*3600e3);return x.toISOString().slice(0,10)}if(typeof d==='number'&&d>20000&&d<80000){const x=new Date(Date.UTC(1899,11,30)+d*864e5);return x.toISOString().slice(0,10)}const s=String(d||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(0,10):null},
@@ -3232,7 +3369,7 @@ linea(){const c=cfgA('armado');const hoy=entArm().filter(e=>e.fecha===today()).s
   const efD=r1?s1/r1:null;const pers=personalArmadoHoy().filter(p=>!(S.horas&&estadoHoras(p.id,today())?.aus)).length;const turno=Math.max(0,(diffMin(c.ini,c.fin)||0)-(c.pausa||0));
   let hp=pers*turno/60,auto=0;for(const e of hoy)if(e.tipo==='armado'){auto+=+e.qty||0;hp-=Math.max(1,(e.personas||[]).length)*(+e.min||0)/60}for(const o of A){if(hp<=0)break;const s=stdArm(o.code);if(!s)continue;const q=Math.min(o.falta,Math.floor(hp*s));auto+=q;hp-=q/s}auto=Math.round(auto/10)*10;const obj=c.fijo??auto;
   const enCurso=Object.entries(cur);const mesasLibres=(c.mesas||[]).filter(m=>!cur[m]);
-  return (()=>{const O=objArmUS(c);return barraObjetivo('armado','Objetivo del día','unidades spot',O.obj,O.auto,O.ok,x=>nf(x),O.fr)})()+
+  return (()=>{const O=objArmUS(c);return barraObjetivo('armado','Objetivo del día','unidades spot',O.obj,O.auto,O.ok,x=>nf(x),O.fr,O.pin>0?`<span class="note">incluye ${nf(O.pin)} que salieron armadas de pintura</span>`:'')})()+
    `<div class="kpis kp6"><div class="kpi"><b>${nf(u)}</b><span>unidades armadas hoy</span></div><div class="kpi"><b class="${cls(efD)}">${pct(efD)}</b><span>OEE del día</span></div><div class="kpi"><b>${nf(hoy.filter(e=>e.tipo==='armado').reduce((a,e)=>a+(+e.qty||0)*(usArm(e.code)||0),0),1)}</b><span>unidades spot</span></div><div class="kpi"><b>${nf(def)}</b><span>defectos</span></div><div class="kpi"><b>${nf(par)}</b><span>min de parada</span></div><div class="kpi"><b>${enCurso.filter(([,v])=>v.tipo!=='parada').length} de ${(c.mesas||[]).length}</b><span>mesas trabajando</span></div></div>
    ${evolucionHoras(hoy.filter(e=>e.tipo==='armado'),'armado',e=>+e.qty||0,e=>{const s=stdArm(e.code);const p=Math.max(1,(e.personas||[]).length);return s?[(+e.qty||0)/s*60,p*(+e.min||0)]:[0,0]})}
    <section class="panel"><div class="pzh" style="align-items:center;margin-bottom:8px"><h2 style="margin:0">Línea del día</h2><span class="note">Mesas: ${(c.mesas||[]).map(m=>`<b>${esc(m)}</b> ${cur[m]?(cur[m].tipo==='parada'?'parada':'trabajando'):'libre'}`).join(', ')}</span></div><div class="linea">
@@ -3292,7 +3429,7 @@ stock(B){const R=Object.values(stockArmado()).filter(X=>X.rec>0).sort((a,b)=>b.d
    ${R.length?`<div class="tw"><table><tr><th>Pieza</th><th>Código</th><th>Color</th><th>Artículos</th><th class="n">Recibido</th><th class="n">Consumido</th><th class="n">Disponible</th></tr>${R.map(X=>`<tr><td><b>${esc(X.pieza)}</b></td><td class="note">${esc(X.codigo||'')}</td><td><span class="pill">${esc(X.color)}</span></td><td class="note">${esc((X.arts||[]).slice(0,3).join(', '))}</td><td class="n">${nf(X.rec)}</td><td class="n">${nf(X.cons)}</td><td class="n"><b>${nf(X.disp)}</b></td></tr>`).join('')}</table></div>`:'<p class="note">Todavía no llegó nada a armado.</p>'}</section>`},
 registros(B){const F=this.F=this.F||{d0:addDays(today(),-6),d1:today()};const E=entArm().filter(e=>e.fecha>=F.d0&&e.fecha<=F.d1).sort((a,b)=>(b.fecha+b.ini).localeCompare(a.fecha+a.ini));
   B.innerHTML=`<section class="panel"><div class="row"><label class="f" style="flex:0 1 160px">Desde<input type="date" id="arD" value="${F.d0}"></label><label class="f" style="flex:0 1 160px">Hasta<input type="date" id="arH" value="${F.d1}"></label></div></section>
-   <section class="panel">${S.canPlan?'':'<p class="note" style="margin:0 0 8px">Solo el planificador puede editar o borrar registros de armado.</p>'}${E.length?`<div class="tw"><table><tr>${puedeEditReg()?bkTH():''}<th>Fecha</th><th>Horario</th><th>Mesa</th><th>Registro</th><th>Código</th><th>Color</th><th class="n">Unidades</th><th class="n">Def. pintura</th><th class="n">Def. proveedor</th><th class="n">Def. fábrica</th><th class="n">Scrap armado</th><th class="n">Personas</th><th class="n">Eficiencia</th><th>Obs.</th><th></th></tr>
+   <section class="panel">${S.canPlan?'':'<p class="note" style="margin:0 0 8px">Solo el planificador puede editar o borrar registros de armado.</p>'}${E.length?`<div class="tw fit reg"><table><tr>${puedeEditReg()?bkTH():''}<th>Fecha</th><th>Horario</th><th>Mesa</th><th>Registro</th><th>Código</th><th>Color</th><th class="n">Unidades</th><th class="n">Def. pintura</th><th class="n">Def. proveedor</th><th class="n">Def. fábrica</th><th class="n">Scrap armado</th><th class="n">Personas</th><th class="n">Eficiencia</th><th>Obs.</th><th></th></tr>
    ${E.map(e=>`<tr>${puedeEditReg()?bkTD(e._doc+'|'+e.id):''}<td>${fmtD(e.fecha)}</td><td>${esc(e.ini)}–${esc(e.fin)}</td><td>${esc(e.mesa||'')}</td><td>${e.tipo==='armado'?esc(e.oarm_num||'fuera de plan'):`<span class="pill bad">${esc(e.motivoTxt||'Parada')}</span>`}</td><td>${esc(e.code||'')}</td><td>${esc(e.color||'')}</td><td class="n">${e.tipo==='armado'?nf(e.qty):''}</td><td class="n">${e.dpint||''}</td><td class="n">${e.dprov||''}</td><td class="n">${e.dfab||''}</td><td class="n">${e.darm||''}</td><td class="n">${e.tipo==='armado'?(e.personas||[]).length:''}</td><td class="n">${e.tipo==='armado'?pct(efArm(e)):''}</td><td class="note">${esc(e.obs||'')}</td><td>${puedeEditReg()?`<button class="btn link" data-aed="${esc(e._doc)}|${esc(e.id)}">Editar</button> <button class="btn link" data-adel="${esc(e._doc)}|${esc(e.id)}">Borrar</button>`:''}</td></tr>`).join('')}</table></div>`:'<p class="note">No hay registros en ese período.</p>'}</section>`;
   if(puedeEditReg())bindBulk(B,'registros',ids=>borrarItems(ids,mutarArm));
   $('#arD').onchange=()=>{F.d0=$('#arD').value;this.registros(B)};$('#arH').onchange=()=>{F.d1=$('#arH').value;this.registros(B)};
@@ -3367,7 +3504,7 @@ V.armado.linea=function(){const c=cfgA('armado');const hoy=entArm().filter(e=>e.
   let hp=pers*turno/60,auto=0;for(const e of hoy)if(e.tipo==='armado'){auto+=+e.qty||0;hp-=Math.max(1,(e.personas||[]).length)*(+e.min||0)/60}for(const o of A){if(hp<=0)break;const s=stdArm(o.code);if(!s)continue;const q=Math.min(o.falta,Math.floor(hp*s));auto+=q;hp-=q/s}auto=Math.round(auto/10)*10;const obj=c.fijo??auto;
   const mesasOc=new Set(T.map(t=>t.mesa));const enc=new Set(T.map(t=>t.oarm));
   const estMesa=m=>PA[m]?'parada':T.some(t=>t.mesa===m)?`trabajando${T.filter(t=>t.mesa===m).length>1?' ('+T.filter(t=>t.mesa===m).length+')':''}`:'libre';
-  return (()=>{const O=objArmUS(c);return barraObjetivo('armado','Objetivo del día','unidades spot',O.obj,O.auto,O.ok,x=>nf(x),O.fr)})()+
+  return (()=>{const O=objArmUS(c);return barraObjetivo('armado','Objetivo del día','unidades spot',O.obj,O.auto,O.ok,x=>nf(x),O.fr,O.pin>0?`<span class="note">incluye ${nf(O.pin)} que salieron armadas de pintura</span>`:'')})()+
    `<div class="kpis kp6"><div class="kpi"><b>${nf(u)}</b><span>unidades armadas hoy</span></div><div class="kpi"><b class="${cls(efD)}">${pct(efD)}</b><span>OEE del día</span></div><div class="kpi"><b>${nf(hoy.filter(e=>e.tipo==='armado').reduce((a,e)=>a+(+e.qty||0)*(usArm(e.code)||0),0),1)}</b><span>unidades spot</span></div><div class="kpi"><b>${nf(def)}</b><span>defectos</span></div><div class="kpi"><b>${nf(par)}</b><span>min de parada</span></div><div class="kpi"><b>${mesasOc.size} de ${(c.mesas||[]).length}</b><span>mesas trabajando</span></div></div>
    ${evolucionHoras(hoy.filter(e=>e.tipo==='armado'),'armado',e=>+e.qty||0,e=>{const s=stdArm(e.code);const p=Math.max(1,(e.personas||[]).length);return s?[(+e.qty||0)/s*60,p*(+e.min||0)]:[0,0]})}
    <section class="panel"><div class="pzh" style="align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px"><h2 style="margin:0">Línea del día</h2><span class="row" style="gap:10px;align-items:center"><span class="note">${(c.mesas||[]).map(m=>`<b>${esc(m)}</b> ${estMesa(m)}`).join(', ')}</span>${ed?'<button class="btn sec sm" id="aParM">Parada de una mesa</button>':''}</span></div><div class="linea">
@@ -3850,7 +3987,7 @@ route();
   S.db=auditar(db);S.live=true;route();
   for(const k of ['productos','centros','personal','motivos','vinculos','ventas','perfiles','colores','pintura_std','motivos_pintura','motivos_armado','armado_std','operarios_cfg']){
     db.doc('maestro/'+k).onSnapshot(s=>{const prev=JSON.stringify(S.M[k]);S.M[k]=s.exists?s.data():null;S.loaded[k]=true;if(k==='perfiles'&&prev!==JSON.stringify(S.M[k])){route();return}changed('maestro')},()=>{})}
-  for(const k of ['pendiente','parametros','stock','ajustes','objetivos','armado_plan','pantalla','gratificacion','visibilidad'])db.doc('planificacion/'+k).onSnapshot(s=>{S.P[k]=s.exists?s.data():null;changed('plan')},()=>{});
+  for(const k of ['pendiente','parametros','stock','ajustes','objetivos','armado_plan','pintura_plan','pantalla','gratificacion','visibilidad'])db.doc('planificacion/'+k).onSnapshot(s=>{S.P[k]=s.exists?s.data():null;changed('plan')},()=>{});
   S.derivs=[];db.collection('derivaciones').onSnapshot(q=>{S.derivs=q.docs.map(d=>({id:d.id,...d.data()}));changed('datos')},()=>{});
   S.fotopend=[];db.collection('fotopend').onSnapshot(q=>{S.fotopend=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==='taller')pendBar()},()=>{});
   S.arm=[];db.collection('armado').onSnapshot(q=>{S.arm=q.docs.map(d=>({id:d.id,...d.data()}));changed('datos')},()=>{});
