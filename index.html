@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script src="/Paneldepaneles/candado.js" data-panel="produccion" data-sin-login="ot,pantalla"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Spotsline Producción</title>
@@ -279,7 +280,7 @@ body.tvon .app{display:none}
     <a href="#auditoria" data-v="auditoria">Registro de cambios</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-26 c</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-26 e</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -2599,9 +2600,11 @@ async function cargarHoras(){if(!S.supa)return;const H={apikey:SUPA.key,Authoriz
     try{S.horasVac=await fila('vacaciones_v1');const pv=await fila('personal_v1');S.horasPers=Array.isArray(pv?.rows)?pv.rows.map(r=>({id:r.id,legajo:r.legajo,nombre:r.nombre,empresa:r.empresa,baja:r.baja})):null}catch(e){}
     changed('datos')}catch(e){S.horasErr='No se pudo leer el panel de horas';}}
 /* id del panel de horas (SPT-xxx) para leer vacaciones programadas */
-function idPanelHoras(e){if(!e||!S.horasPers)return null;const c=S.horasPers.filter(r=>r.legajo!=null&&String(r.legajo)===String(e.legajoLenox));
-  if(c.length===1)return c[0].id;let best=null,bs=0;for(const r of (c.length?c:S.horasPers)){const sc=scoreNom(r.nombre,e.nombre)+(r.empresa&&e.empresa&&nrm(r.empresa)===nrm(e.empresa)?0.5:0);if(sc>bs){bs=sc;best=r}}return bs>=2?best.id:null}
-function vacacionProgramada(e,fecha){const sol=S.horasVac?.solicitudes;if(!Array.isArray(sol))return null;const id=idPanelHoras(e);if(!id)return null;
+function idPanelHoras(e,p){if(!e||!S.horasPers)return null;const legs=new Set([p?.legajo,e.legajoLenox].filter(x=>x!=null&&x!=='').map(String));
+  const sc=r=>Math.max(scoreNom(r.nombre,e.nombre),p?scoreNom(r.nombre,p.nombre):0)+(r.empresa&&e.empresa&&nrm(r.empresa)===nrm(e.empresa)?0.5:0);
+  let best=null,bs=0;for(const r of S.horasPers.filter(r=>legs.has(String(r.legajo)))){const v=sc(r);if(v>bs){bs=v;best=r}}if(best&&bs>=1.5)return best.id;
+  best=null;bs=0;for(const r of S.horasPers){const v=sc(r);if(v>bs){bs=v;best=r}}return bs>=2?best.id:null}
+function vacacionProgramada(e,fecha,p){const sol=S.horasVac?.solicitudes;if(!Array.isArray(sol))return null;const id=idPanelHoras(e,p);if(!id)return null;
   const v=sol.find(x=>x.pid===id&&!x.cancelada&&x.desde<=fecha&&x.hasta>=fecha);return v?{k:'vacaciones',label:'Vacaciones'+(v.autorizo?'':(('autorizo' in v)?' (falta autorizar)':'')),aus:true,obs:`Vacaciones programadas del ${fmtD(v.desde)} al ${fmtD(v.hasta)}${v.obs?' · '+v.obs:''}`,prog:true}:null}
 function sinFichadas(fecha){return !!(S.horasHasta&&fecha>S.horasHasta)}
 function avisoHoras(){if(!S.horas||!sinFichadas(today()))return '';return `<p class="note" style="margin:0 0 10px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--lampbg)">El panel de horas tiene fichadas cargadas hasta el <b>${fmtD(S.horasHasta)}</b>: hoy solo se ven las <b>vacaciones programadas</b> y los feriados. Presentes, ausentes y licencias del día aparecen cuando se actualizan las fichadas del reloj en el panel de horas.</p>`}
@@ -2613,12 +2616,12 @@ function empleadoHoras(pid){if(!S.horas)return null;S.horasIdx=S.horasIdx||{};if
   for(const e of S.horas){const ape=[...tok(e.nombre)][0];let sc=Math.max(...cand.map(n=>scoreNom(n,e.nombre)));if(ape&&cand.some(n=>[...tok(n)][0]===ape))sc+=0.5;
     if(sc>bs){bs=sc;best=e;tie=false}else if(sc===bs&&sc>0)tie=true}
   return S.horasIdx[pid]=(bs>=2||(bs>=1.5&&!tie))?best:null}
-function estadoHoras(pid,fecha){const e=empleadoHoras(pid);if(!e)return null;const [y,m,d]=fecha.split('-');const dmy=`${d}/${m}/${y}`;const x=(e.dias||[]).find(z=>z.date===dmy);if(!x){const v=vacacionProgramada(e,fecha);if(v)return v;if((S.horasVac?.feriados||[]).includes(fecha))return {k:'feriado',label:'Feriado',aus:true};return sinFichadas(fecha)?{k:'sin',label:'sin fichadas cargadas',sinDatos:true}:{k:'sin',label:'sin novedad'}}
+function estadoHoras(pid,fecha){const e=empleadoHoras(pid);if(!e)return null;const [y,m,d]=fecha.split('-');const dmy=`${d}/${m}/${y}`;const x=(e.dias||[]).find(z=>z.date===dmy);if(!x){const v=vacacionProgramada(e,fecha,persObj(pid));if(v)return v;if((S.horasVac?.feriados||[]).includes(fecha))return {k:'feriado',label:'Feriado',aus:true};return sinFichadas(fecha)?{k:'sin',label:'sin fichadas cargadas',sinDatos:true}:{k:'sin',label:'sin novedad'}}
   const o=String(x.obs||'').toLowerCase();const trab=(x.total&&x.total!=='00:00')||/(^|[^a-z])e\s*:?\s*\d{1,2}:\d{2}/.test(o);
   if(/vacaci/.test(o))return {k:'vacaciones',label:'Vacaciones',aus:true,obs:x.obs};if(/licencia/.test(o))return {k:'licencia',label:'Licencia',aus:true,obs:x.obs};
   if(/sindical|gremial/.test(o))return {k:'gremial',label:'Licencia gremial',aus:true,obs:x.obs};if(/ausencia con aviso/.test(o))return {k:'aviso',label:'Ausente con aviso',aus:true,obs:x.obs};
   if(/ausencia/.test(o))return {k:'ausente',label:'Ausente',aus:true,obs:x.obs};if(/feriado/.test(o)&&!trab)return {k:'feriado',label:'Feriado',aus:true,obs:x.obs};
-  if(trab){const mm=String(x.obs||'').match(/(?:^|[^A-Za-z])E\s*:?\s*(\d{1,2}:\d{2})/i);return {k:'presente',label:'Presente',entrada:mm?mm[1]:null}}return vacacionProgramada(e,fecha)||{k:'sin',label:'sin novedad'}}
+  if(trab){const mm=String(x.obs||'').match(/(?:^|[^A-Za-z])E\s*:?\s*(\d{1,2}:\d{2})/i);return {k:'presente',label:'Presente',entrada:mm?mm[1]:null}}return vacacionProgramada(e,fecha,persObj(pid))||{k:'sin',label:'sin novedad'}}
 function presencia(fecha){const P=(S.M.personal?.items||[]).filter(p=>p.activo!==false);const A=activasVivas();const aus=[],libres=[],sinVinc=[];
   for(const p of P){if(A.some(a=>a.yo===p.id))continue;const st=estadoHoras(p.id,fecha);if(st===null&&S.horas){sinVinc.push(p);libres.push({p,st:null});continue}if(st&&st.aus)aus.push({p,st});else libres.push({p,st})}
   return {aus,libres,sinVinc}}
