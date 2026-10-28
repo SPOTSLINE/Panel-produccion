@@ -210,7 +210,7 @@ th.s-asc::after{content:' ▲';font-size:9px}th.s-desc::after{content:' ▼';fon
   .app{grid-template-columns:1fr}
   .rail{position:sticky;top:0;height:auto;flex-direction:row;align-items:center;overflow-x:auto;padding:10px 12px;gap:2px;z-index:5;padding-top:calc(10px + env(safe-area-inset-top,0px))}
   :root{padding-top:0}
-  .brandsub,.rail .grp,.rail .foot{display:none}.brand{padding-bottom:0;white-space:nowrap;margin-right:8px;font-size:15px}.brand .logo-full{display:none}.brand .logo-mark{display:block}
+  .brandsub,.rail .grp,.rail .foot{display:none}.rail #perfilFoot:not(:empty){display:block;white-space:nowrap;margin:0 0 0 auto;padding:0 6px;opacity:.85}.brand{padding-bottom:0;white-space:nowrap;margin-right:8px;font-size:15px}.brand .logo-full{display:none}.brand .logo-mark{display:block}
   .rail a{white-space:nowrap;padding:7px 10px}.rail a.off{display:none}
   main{padding:20px 16px 60px}.grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .bars .b{grid-template-columns:90px 1fr 76px}
@@ -300,7 +300,7 @@ body.tvon .app{display:none}
     <a href="#auditoria" data-v="auditoria">Registro de cambios</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-28 b</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-28 c</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -2755,25 +2755,40 @@ function permisosDe(p){if(!p)return {};if(p.permisos)return p.permisos;if(p.vist
 function perfiles(){const it=S.M.perfiles?.items;const del=S.M.perfiles?.borrados||[];if(!it||!it.length)return PERF_DEF;return [...it,...PERF_DEF.filter(d=>!it.some(x=>x.id===d.id)&&!del.includes(d.id))]}
 function accesoActivo(){return perfiles().some(p=>p.pin&&permisosDe(p).usuarios)}
 function enModoPlanta(){return !!(window.PORTAL&&window.PORTAL.planta)}
-function perfilActual(){if(!accesoActivo()&&enModoPlanta())return null;if(!accesoActivo())return perfiles().find(p=>p.id==='plan')||PERF_DEF[0];let s=null;try{s=JSON.parse(localStorage.getItem('spl.sesion')||'null')}catch(e){}
-  const p=s&&perfiles().find(x=>x.id===s.id);return p&&p.pin&&p.pin===s.h?p:null}
+function perfilActual(){let s=null;try{s=JSON.parse(localStorage.getItem('spl.sesion')||'null')}catch(e){}if(!accesoActivo()&&!enModoPlanta())return perfiles().find(p=>p.id==='plan')||PERF_DEF[0];
+  if(s&&s.op)return perfilOperario(s);const p=s&&perfiles().find(x=>x.id===s.id);return p&&p.pin&&p.pin===s.h?p:null}
+/* operario de pintura o armado que entra al panel con su nombre y su clave de operario (la del QR) */
+const AREAS_OP_PANEL=['pintura','armado'];
+function perfilOperario(s){const per=(S.M.personal?.items||[]).find(x=>x.id===s.op);if(!per||per.activo===false||!per.pinq||per.pinq!==s.h)return null;
+  const a=AREAS_OP_PANEL.includes(s.area)?s.area:null;if(!a)return null;const base=perfiles().find(x=>x.id===a);
+  return {id:'op:'+per.id,op:per.id,nombre:per.nombre,area:a,vistas:[a,'planta','instructivo'],permisos:{cargar:true},pin:per.pinq,operario:true,base:base?.nombre||null}}
+function operariosPanel(a){const L=a?[a]:AREAS_OP_PANEL;return L.flatMap(x=>personalDeArea(x).filter(p=>p.pinq).map(p=>({p,a:x}))).sort((u,v)=>u.p.nombre.localeCompare(v.p.nombre,'es'))}
 function vistaPermitida(v,p){p=p||perfilActual();if(v==='ot')return true;if(!p)return false;return p.vistas==='*'||(p.vistas||[]).includes(v)}
 function aplicarPerfil(){const p=perfilActual();S.perfil=p;const pm=permisosDe(p);S.canPlan=!!pm.plan;S.puedeMaestro=!!pm.maestro;S.puedeUsuarios=!!pm.usuarios;S.puedeEditar=!!pm.editar;S.puedeCargar=!!pm.cargar;S.puedeDerivar=!!pm.derivar;S.canWrite=!!(pm.cargar||pm.editar);
   S.areaFija=p&&p.area&&p.vistas!=='*'?p.area:null;
   document.querySelectorAll('.rail a[data-v]').forEach(a=>a.classList.toggle('hide',a.dataset.v==='ot'?!(p&&(p.vistas==='*'||(p.vistas||[]).includes('taller'))):!vistaPermitida(a.dataset.v,p)));
   document.querySelectorAll('.rail .grp').forEach(g=>{let n=g.nextElementSibling,vis=false;while(n&&!n.classList.contains('grp')&&n.tagName==='A'){if(!n.classList.contains('hide'))vis=true;n=n.nextElementSibling}g.classList.toggle('hide',!vis)});
   {const bz=$('#bzBtn');if(bz){bz.classList.toggle('hide',!(S.canPlan||S.puedeUsuarios));bz.onclick=e=>{e.preventDefault();modalBuzon()}}}
-  const f=$('#perfilFoot');if(f)f.innerHTML=accesoActivo()&&p?`${esc(p.nombre)} <button class="btn link" id="pfOut" style="color:inherit">salir</button>`:'';const o=$('#pfOut');if(o)o.onclick=()=>{try{localStorage.removeItem('spl.sesion')}catch(e){}route()}}
+  const f=$('#perfilFoot');if(f)f.innerHTML=(accesoActivo()||enModoPlanta())&&p?`${esc(p.nombre)} <button class="btn link" id="pfOut" style="color:inherit">salir</button>`:'';const o=$('#pfOut');if(o)o.onclick=()=>{try{localStorage.removeItem('spl.sesion')}catch(e){}route()}}
 const OJO_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const OJO_NO='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.9 17.9A10.8 10.8 0 0 1 12 19C5 19 1 12 1 12a19.6 19.6 0 0 1 5.1-5.9M9.9 5.2A9.9 9.9 0 0 1 12 5c7 0 11 7 11 7a19.7 19.7 0 0 1-3.2 4.2M1 1l22 22"/></svg>';
 const OJO_BTN=`<button type="button" class="ojo" data-ojo title="Mostrar la clave" aria-label="Mostrar la clave">${OJO_SVG}</button>`;
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-ojo]');if(!b)return;e.preventDefault();const i=b.parentElement.querySelector('input');if(!i)return;const ver=i.type==='password';i.type=ver?'text':'password';b.innerHTML=ver?OJO_NO:OJO_SVG;b.title=b.ariaLabel=ver?'Ocultar la clave':'Mostrar la clave';i.focus()});
 function pantallaLogin(){document.body.classList.add('solo');const P=perfiles().filter(p=>p.pin).sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  $('#main').innerHTML=`<div class="op1" style="max-width:420px"><h1>Spotsline Producción</h1><p class="lead">Elegí tu usuario e ingresá la clave.</p>
-   <div class="opcard"><label class="f">Usuario<select id="lgP" class="opin">${P.map(p=>`<option value="${esc(p.id)}" ${lsGet('ultPerfil')===p.id?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></label>
-   <label class="f" style="margin-top:10px">Clave<span class="pwd"><input id="lgK" type="password" class="opin" autocomplete="current-password">${OJO_BTN}</span></label><div class="err" id="lgE"></div>
-   <button class="opbig" id="lgGo">Entrar</button></div><p class="note">Los operarios cargan desde el QR de su orden de trabajo y no necesitan usuario.</p></div>`;
-  const go=async()=>{const id=$('#lgP').value,k=$('#lgK').value;const p=perfiles().find(x=>x.id===id);const h=await hashPin(k);if(!p||p.pin!==h){$('#lgE').textContent='Clave incorrecta.';return}
+  const hv=(location.hash||'').slice(1).split('/')[0];const aOp=AREAS_OP_PANEL.includes(hv)?hv:null;const conOp=aOp||hv==='ingreso';const OP=conOp?operariosPanel(aOp):[];pantallaLogin._n=conOp?OP.length:-1;
+  const modo=conOp&&(pantallaLogin.modo||'op')==='op'?'op':'us';
+  const ultOp=lsGet('ultOp');
+  $('#main').innerHTML=`<div class="op1" style="max-width:420px"><h1>Spotsline Producción</h1><p class="lead">${aOp?esc(AREAS_PL[aOp]||aOp)+': ':''}${modo==='op'?'elegí tu nombre e ingresá tu clave de operario.':'elegí tu usuario e ingresá la clave.'}</p>
+   ${conOp?`<div class="tabs" style="margin-top:0"><button data-lgm="op" class="${modo==='op'?'on':''}">Operario</button><button data-lgm="us" class="${modo==='us'?'on':''}">Supervisor / otro usuario</button></div>`:''}
+   <div class="opcard">${modo==='op'?(OP.length?`<label class="f">Tu nombre<select id="lgO" class="opin">${(aOp?[aOp]:AREAS_OP_PANEL).map(a=>{const L=OP.filter(x=>x.a===a);return L.length?`<optgroup label="${esc(AREAS_PL[a]||a)}">${L.map(x=>`<option value="${esc(x.p.id)}|${a}" ${ultOp===x.p.id+'|'+a?'selected':''}>${esc(x.p.nombre)}</option>`).join('')}</optgroup>`:''}).join('')}</select></label>`:`<p class="note">No hay personas de ${aOp?esc(AREAS_PL[aOp]||aOp):'pintura ni armado'} con clave de operario. Se asigna en Maestro > Personal.</p>`)
+     :`<label class="f">Usuario<select id="lgP" class="opin">${P.map(p=>`<option value="${esc(p.id)}" ${lsGet('ultPerfil')===p.id?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select></label>`}
+   <label class="f" style="margin-top:10px">${modo==='op'?'Clave de operario':'Clave'}<span class="pwd"><input id="lgK" type="password" class="opin" ${modo==='op'?'inputmode="numeric"':''} autocomplete="current-password">${OJO_BTN}</span></label><div class="err" id="lgE"></div>
+   <button class="opbig" id="lgGo">Entrar</button></div><p class="note">${conOp?'Es la misma clave que usás en el celular con el QR.':'Los operarios cargan desde el QR de su orden de trabajo y no necesitan usuario.'}</p></div>`;
+  $('#main').querySelectorAll('[data-lgm]').forEach(b=>b.onclick=()=>{pantallaLogin.modo=b.dataset.lgm;pantallaLogin()});
+  const go=async()=>{const k=$('#lgK').value;const h=await hashPin(k);
+    if(modo==='op'){const v=$('#lgO')?.value;if(!v){$('#lgE').textContent='Elegí tu nombre.';return}const [pid,a]=v.split('|');const per=(S.M.personal?.items||[]).find(x=>x.id===pid);if(!per||per.pinq!==h){$('#lgE').textContent='Clave incorrecta.';return}
+      try{localStorage.setItem('spl.sesion',JSON.stringify({op:pid,area:a,h}))}catch(e){}lsSet('ultOp',v);if(!AREAS_OP_PANEL.includes((location.hash||'').slice(1).split('/')[0]))history.replaceState(null,'','#'+a);document.body.classList.remove('solo');route();return}
+    const id=$('#lgP').value;const p=perfiles().find(x=>x.id===id);if(!p||p.pin!==h){$('#lgE').textContent='Clave incorrecta.';return}
     try{localStorage.setItem('spl.sesion',JSON.stringify({id,h}))}catch(e){}lsSet('ultPerfil',id);document.body.classList.remove('solo');route()};
   $('#lgGo').onclick=go;$('#lgK').onkeydown=e=>{if(e.key==='Enter')go()};$('#lgK').focus()}
 function htmlAccesos(){const P=perfiles();const ed=S.puedeUsuarios;const secLbl=a=>a?(AREAS_PL[a]||a):'Todos';const co=cfgOp();
@@ -4003,7 +4018,7 @@ function route(){const h=(location.hash||'#general').slice(1);let [v,sel,...rest
   if(S.view&&S.view!==name&&S.view!=='login')V[S.view]?.unmount?.();S.view=name;V[name].mount(sel,rest);try{window.scrollTo(0,0)}catch(e){}}
 window.addEventListener('hashchange',()=>{if(S.view==='maestro'&&BOM.dirty&&!location.hash.startsWith('#maestro')){if(!confirm('Hay cambios sin guardar en la lista de materiales. ¿Salir igual?')){history.replaceState(null,'','#maestro');return}BOM.dirty=false;BOM.draft=null}route()});
 document.querySelectorAll('[data-pronto]').forEach(a=>a.onclick=e=>{e.preventDefault();toast(a.dataset.pronto+' se suma en la próxima etapa')});
-function changed(what){DV++;try{VIS.apply()}catch(e){}if(what==='datos'||what==='plan')programarResumenGeneral();const v=V[S.view];if(!v)return;
+function changed(what){DV++;if(S.view==='login'){if(perfilActual()){route();return}const hv=(location.hash||'').slice(1).split('/')[0];const n=(AREAS_OP_PANEL.includes(hv)||hv==='ingreso')?operariosPanel(AREAS_OP_PANEL.includes(hv)?hv:null).length:-1;if(n!==pantallaLogin._n&&!($('#lgK')?.value)){pantallaLogin();}return}try{VIS.apply()}catch(e){}if(what==='datos'||what==='plan')programarResumenGeneral();const v=V[S.view];if(!v)return;
   if(what==='maestro'&&['taller','plan'].includes(S.view)){ /* formularios dependen del maestro */ if(!document.activeElement||document.activeElement===document.body)v.mount(v.sel);else v.update();return}
   v.update()}
 
