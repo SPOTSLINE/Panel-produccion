@@ -302,7 +302,7 @@ body.tvon .app{display:none}
     <a href="#auditoria" data-v="auditoria">Registro de cambios</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-28 f</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-28 g</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -933,10 +933,112 @@ config(){const c=tvCfg();const ed=S.canPlan;const h=today();
   document.querySelectorAll('[data-tva]').forEach(b=>b.onclick=()=>{const [k,id]=b.dataset.tva.split('|');const a=c.avisos.find(x=>x.id===id);if(!a)return;
     if(k==='ed')modal(a);else if(k==='pa')save(d=>{const x=d.avisos.find(z=>z.id===id);x.activo=x.activo===false?true:false});else if(confirm('¿Borrar el aviso '+a.titulo+'?'))save(d=>{d.avisos=d.avisos.filter(z=>z.id!==id)},'Aviso borrado')})}};
 
+/* ---------- UNIDADES SPOT: tiempos estándar por código (Taller + Pintura + Armado) ----------
+   Criterio (Premio produccion - Liquidacion.xlsx): US = (min Taller + min Pintura + min Armado) ÷ minutos por US (8,5).
+   Tiempos de Odoo: mano de obra por sector en $ ÷ valor hora × 60. LISTON y BASE xCAB/xCOL no pasan por Armado (Armado 0).
+   maestro/us_std = {items:{CODE:{t,p,a,desc,fam,fuente,ts,por}}, eq:{CODE:BASE}, quitados:[CODE], valorHora} pisa la tabla de base (GR_STD/GR_EQ). */
+const USM={
+ doc(){return S.M.us_std||{}},
+ valorHora(){return +this.doc().valorHora||9432},
+ eq(code){const d=this.doc();if(d.eq&&Object.prototype.hasOwnProperty.call(d.eq,code))return d.eq[code]||null;return GR_EQ[code]||null},
+ raw(k){const d=this.doc();const it=d.items?.[k];if(it)return [+it.t||0,+it.p||0,+it.a||0,it.desc||'',it];if((d.quitados||[]).includes(k))return null;const g=GR_STD[k];return g?[g[0],g[1],g[2],g[3],null]:null},
+ std(code){code=String(code||'').toUpperCase();if(!code)return null;const own=this.raw(code);if(own)return own;const e=this.eq(code);return e?this.raw(e):null},
+ todos(){const d=this.doc();const ks=new Set([...Object.keys(GR_STD),...Object.keys(d.items||{})]);for(const q of d.quitados||[])if(!d.items?.[q])ks.delete(q);return [...ks].sort()},
+ /* códigos en uso que no tienen US */
+ sinUS(){const vinc=S.M.vinculos?.items||{};const C=new Map();const add=(c,de)=>{c=String(c||'').toUpperCase().trim();if(!c)return;if(!C.has(c))C.set(c,new Set());C.get(c).add(de)};
+   const prod=S.M.productos?.items||{};for(const [c,f] of Object.entries(vinc))if(f&&prod[f]&&!/^insumo/i.test(nrm(f)))add(c,'lista de materiales');for(const o of S.oarm||[])if(o.estado==='abierta')add(o.code,'orden de armado');
+   for(const L of PLA.data().lineas||[])for(const it of L.items||[])if(!it.hecho)add(it.code,'plan de armado');
+   const d0=addDays(today(),-60);for(const e of entArm())if(e.tipo==='armado'&&e.fecha>=d0)add(e.code,'armado registrado');
+   return [...C].filter(([c])=>!this.std(c)).map(([c,de])=>({code:c,fam:vinc[c]||null,de:[...de]})).sort((a,b)=>(b.de.length-a.de.length)||a.code.localeCompare(b.code))},
+ sinArmado(code,desc){return /LISTON/i.test(desc||'')||/^BASE\d+(CAB|COL)/i.test(code)},
+ /* sugerencias según el criterio */
+ sug(code,fam){code=String(code).toUpperCase();const vinc=S.M.vinculos?.items||{};fam=fam||vinc[code]||null;const f=fam?S.M.productos?.items?.[fam]:null;const out={fam};
+   if(f){let seg=0,falt=0;for(const p of f.piezas){const w=(p.ops||[]).reduce((a,x)=>a+(+x.seg||0),0);if(!w)falt++;seg+=w*(+p.cant||1)}out.t=seg?+(seg/60).toFixed(2):null;out.tTxt=seg?`ruta de la lista de materiales ${fam}${falt?` (${falt} pieza${falt>1?'s':''} sin tiempos)`:''}`:'la lista de materiales no tiene tiempos'}
+   else out.tTxt='sin lista de materiales vinculada';
+   const otros=fam?Object.keys(vinc).filter(c=>vinc[c]===fam&&c!==code&&this.std(c)):[];const col=fam?colorDeCodigo(code,fam):null;
+   const sp=!!col&&/SIN PINTAR/i.test(col);
+   if(otros.length){const mismoP=otros.find(c=>{const cc=colorDeCodigo(c,fam);const csp=!!cc&&/SIN PINTAR/i.test(cc);return sp?csp:(!csp&&this.std(c)[1]>0)})||otros[0];const st=this.std(mismoP);out.p=st[1];out.pTxt=`igual que ${mismoP} (misma familia${sp?', sin pintar':', pintado'})`;out.ref=mismoP}
+   else{out.p=sp?0:null;out.pTxt=sp?'sin pintar: 0':'no hay otro código de la familia: cargalo desde Odoo'}
+   const desc=fam?(otros.length?this.std(otros[0])[3]:fam):'';
+   if(this.sinArmado(code,desc)){out.a=0;out.aTxt='LISTON / BASE xCAB-xCOL: no pasa por Armado'}else{const s2=stdArm(code);if(s2){out.a=+(60/s2).toFixed(2);out.aTxt=`60 ÷ estándar de armado (${nf(s2,1)} u/h por persona)`}else if(otros.length){out.a=this.std(otros[0])[2];out.aTxt='igual que '+otros[0]}else out.aTxt='sin estándar de armado'}
+   out.desc=desc;return out},
+ puede(){return !!(S.puedeMaestro||S.canPlan)},
+ async guardar(fn,msg){const d=JSON.parse(JSON.stringify(S.M.us_std||{items:{},eq:{}}));d.items=d.items||{};d.eq=d.eq||{};fn(d);d.actualizado=new Date().toISOString();d.por=S.perfil?.nombre||null;
+   try{await S.db.doc('maestro/us_std').set(d);toast(msg||'Guardado')}catch(e){toast('No se pudo guardar')}},
+ render(box){const ed=this.puede();const minUS=GR.c().minUS;const q=nrm(this.q||'');const fil=this.f||'';const SU=this.sinUS();
+   const all=this.todos().map(k=>{const r=this.raw(k);const tot=r[0]+r[1]+r[2];const st=!tot?'SIN ESTÁNDAR':(r[0]===0&&r[1]===0)||r[2]===0&&!this.sinArmado(k,r[3])?'revisar':'OK';return {k,t:r[0],p:r[1],a:r[2],desc:r[3],tot,us:tot/minUS,man:!!r[4],it:r[4],st}});
+   const eqs=Object.entries({...GR_EQ,...(this.doc().eq||{})}).filter(([,b])=>b);
+   const L=all.filter(x=>(!q||nrm(x.k+' '+x.desc).includes(q))&&(!fil||(fil==='man'?x.man:fil==='rev'?x.st!=='OK':true)));
+   box.innerHTML=`<section class="panel"><h2>Unidades spot (US)</h2>
+    <p class="note" style="margin-top:-4px"><b>US por unidad = (min Taller + min Pintura + min Armado) ÷ ${nf(minUS,1)}</b>. Los minutos salen de Odoo: mano de obra de cada sector en $ ÷ ${nf(this.valorHora())} $/hora × 60. LISTON y BASE xCAB / xCOL no pasan por Armado (Armado 0). Estos tiempos son los que usan el Objetivo, la Línea del día de armado y la TV. Un código nuevo puede tener sus tiempos o usar los de otro código igual (equivalencia).</p>
+    ${ed?`<div class="row" style="gap:8px"><button class="btn sm" id="usNew">+ Cargar código</button><button class="btn sec sm" id="usUp">Subir planilla de estándares</button><button class="btn sec sm" id="usDown">Descargar Excel</button><button class="btn link" id="usVH">Valor hora Odoo: ${nf(this.valorHora())} $</button></div>`:''}</section>
+   <section class="panel" style="${SU.length?'border-color:var(--lamp)':''}"><h2>Códigos en uso sin US <span class="note">${SU.length}</span></h2>
+    ${SU.length?`<p class="note" style="margin-top:-4px">Hoy suman 0 US. Arriba los que están en órdenes de armado, el plan de armado o el armado de los últimos 60 días; ${this.verBom?'abajo los que solo están en una lista de materiales':`<button class="btn link" id="usBom">ver también los ${SU.filter(x=>x.de.length===1&&x.de[0]==='lista de materiales').length} que solo están en una lista de materiales</button>`}. ${ed?'Tocá <b>Cargar</b>: el panel sugiere los tiempos según el criterio y vos los confirmás o corregís.':''}</p>
+     <div class="tw fit"><table><tr><th>Código</th><th>Lista de materiales</th><th>Dónde aparece</th><th class="n">Taller sug.</th><th class="n">Pintura sug.</th><th class="n">Armado sug.</th><th class="n">US sug.</th><th></th></tr>
+     ${SU.filter(x=>this.verBom||!(x.de.length===1&&x.de[0]==='lista de materiales')).slice(0,300).map(x=>{const g=this.sug(x.code,x.fam);const ok=g.t!=null&&g.p!=null&&g.a!=null;return `<tr><td><b>${esc(x.code)}</b></td><td>${esc(x.fam||'–')}</td><td class="note">${x.de.map(esc).join(', ')}</td><td class="n">${g.t!=null?nf(g.t,2):'–'}</td><td class="n">${g.p!=null?nf(g.p,2):'–'}</td><td class="n">${g.a!=null?nf(g.a,2):'–'}</td><td class="n">${ok?nf((g.t+g.p+g.a)/minUS,2):'<span class="note">incompleto</span>'}</td><td>${ed?`<button class="btn sm" data-usc="${esc(x.code)}">Cargar</button>`:''}</td></tr>`}).join('')}</table></div>`:'<p class="note">Todos los códigos en uso tienen US.</p>'}</section>
+   <section class="panel"><div class="row" style="align-items:flex-end;gap:10px;margin-bottom:8px"><label class="f" style="flex:1 1 240px">Buscar código o descripción<input id="usQ" value="${esc(this.q||'')}"></label><label class="f" style="flex:0 1 200px">Ver<select id="usF"><option value="">Todos (${all.length})</option><option value="man" ${fil==='man'?'selected':''}>Cargados o cambiados acá</option><option value="rev" ${fil==='rev'?'selected':''}>Para revisar</option></select></label></div>
+    <div class="tw fit"><table><tr><th>Código</th><th>Descripción</th><th class="n">Min Taller</th><th class="n">Min Pintura</th><th class="n">Min Armado</th><th class="n">Min total</th><th class="n">US por u.</th><th>Origen</th><th></th></tr>
+    ${L.slice(0,400).map(x=>`<tr><td><b>${esc(x.k)}</b></td><td class="note">${esc(x.desc||'')}</td><td class="n">${nf(x.t,2)}</td><td class="n">${nf(x.p,2)}</td><td class="n">${nf(x.a,2)}</td><td class="n">${nf(x.tot,2)}</td><td class="n"><b>${nf(x.us,2)}</b></td><td class="note">${x.man?`${esc(x.it.fuente||'cargado acá')}${x.it.por?' · '+esc(x.it.por):''}${x.it.ts?' · '+fmtD(x.it.ts.slice(0,10)):''}`:'planilla del premio'}${x.st==='revisar'?' <span class="pill lamp">revisar</span>':''}</td><td>${ed?`<button class="btn link" data-usc="${esc(x.k)}">editar</button>`:''}</td></tr>`).join('')}</table></div>${L.length>400?'<p class="note">Hay más: buscá el código.</p>':''}
+    <h3 style="margin:16px 0 6px">Equivalencias <span class="note">(el código usa los tiempos de otro)</span></h3>
+    ${eqs.length?`<div class="tw fit"><table><tr><th>Código</th><th>Usa los tiempos de</th><th class="n">US por u.</th><th></th></tr>${eqs.map(([a,b])=>{const st=this.raw(b);return `<tr><td><b>${esc(a)}</b></td><td>${esc(b)}${st?'':' <span class="pill bad">no existe</span>'}</td><td class="n">${st?nf((st[0]+st[1]+st[2])/minUS,2):'–'}</td><td>${ed?`<button class="btn link" data-useq="${esc(a)}">quitar</button>`:''}</td></tr>`}).join('')}</table></div>`:'<p class="note">No hay equivalencias.</p>'}</section>`;
+   const qi=$('#usQ');qi.oninput=()=>{this.q=qi.value;clearTimeout(this._t);this._t=setTimeout(()=>{this.render(box);const n=$('#usQ');n.focus();n.setSelectionRange(n.value.length,n.value.length)},250)};$('#usF').onchange=()=>{this.f=$('#usF').value;this.render(box)};
+   {const vb=$('#usBom');if(vb)vb.onclick=()=>{this.verBom=true;this.render(box)}}
+   if(!ed)return;
+   box.querySelectorAll('[data-usc]').forEach(b=>b.onclick=()=>this.editar(b.dataset.usc));$('#usNew').onclick=()=>this.editar('');
+   box.querySelectorAll('[data-useq]').forEach(b=>b.onclick=()=>{const a=b.dataset.useq;if(!confirm('¿Quitar la equivalencia de '+a+'? Va a sumar 0 US si no tiene tiempos propios.'))return;this.guardar(d=>{d.eq[a]=null},'Equivalencia quitada')});
+   $('#usUp').onclick=()=>this.subir();$('#usDown').onclick=()=>this.descargar();
+   $('#usVH').onclick=()=>{const v=prompt('Valor hora de Odoo para pasar $ a minutos ($ por hora):',this.valorHora());if(v===null)return;const n=parseFloat(String(v).replace(/\./g,'').replace(',','.'));if(!(n>0)){toast('Poné un número');return}this.guardar(d=>{d.valorHora=n},'Valor hora guardado')}},
+ editar(code0){const minUS=GR.c().minUS;const vh=this.valorHora();const vinc=S.M.vinculos?.items||{};
+   const m=document.createElement('div');m.className='modal';
+   const pinta=code=>{code=String(code||'').toUpperCase().trim();const r=code?this.raw(code):null;const e=code?(this.doc().eq?.[code]??GR_EQ[code]??''):'';const g=code?this.sug(code):{};const desc=r?r[3]:'';
+     m.innerHTML=`<div class="dlg" style="width:min(720px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">${code0?'Unidades spot de '+esc(code0):'Cargar código'}</h2><button class="btn link" data-x>Cerrar</button></div>
+      <div class="row"><label class="f">Código<input id="ueC" value="${esc(code)}" ${code0?'readonly':''} list="dlUeC" autocomplete="off"></label><datalist id="dlUeC">${Object.keys(vinc).map(k=>`<option value="${esc(k)}">`).join('')}</datalist><label class="f" style="flex:2 1 260px">Descripción<input id="ueD" value="${esc(desc)}" placeholder="${esc(g.desc?'ej. '+g.desc:'')}"></label></div>
+      ${code?`<p class="note" style="margin:6px 0 0">Lista de materiales: <b>${esc(vinc[code]||'sin vincular')}</b>${r&&!r[4]?' · hoy usa los tiempos de la planilla del premio':''}</p>`:''}
+      <div class="tabs" style="margin:10px 0 8px"><button data-uem="t" class="on">Tiempos propios</button><button data-uem="e">Usar los de otro código</button></div>
+      <div id="ueT"><div class="tw"><table><tr><th>Sector</th><th class="n" style="width:120px">Minutos</th><th class="n" style="width:130px">o $ de Odoo</th><th>Sugerido</th></tr>
+       ${[['t','Taller',0,g.t,g.tTxt],['p','Pintura',1,g.p,g.pTxt],['a','Armado',2,g.a,g.aTxt]].map(([k,n,i,sv,st])=>`<tr><td><b>${n}</b></td><td class="n"><input type="number" step="0.01" min="0" data-uem2="${k}" value="${r?r[i]:(sv??'')}" style="width:110px;text-align:right"></td><td class="n"><input type="number" step="1" min="0" data-uep="${k}" placeholder="$" style="width:120px;text-align:right"></td><td class="note">${sv!=null?`<b>${nf(sv,2)}</b> · ${esc(st||'')} <button class="btn link" data-ues="${k}|${sv}">usar</button>`:esc(st||'–')}</td></tr>`).join('')}
+       <tr><td><b>Total</b></td><td class="n"><b id="ueTot"></b></td><td></td><td class="note">US por unidad: <b id="ueUS"></b> (${'÷ '+nf(minUS,1)})</td></tr></table></div>
+       <p class="note" style="margin:6px 0 0">Si escribís el $ de mano de obra de Odoo, se pasa a minutos: $ ÷ ${nf(vh)} × 60.</p></div>
+      <div id="ueE" class="hide"><label class="f">Usa los tiempos de<input id="ueEq" value="${esc(e||g.ref||'')}" list="dlUeE" autocomplete="off" placeholder="código con US"></label><datalist id="dlUeE">${this.todos().map(k=>`<option value="${esc(k)}">`).join('')}</datalist><p class="note" id="ueEqI"></p></div>
+      <div class="err" id="ueErr"></div><div class="row" style="justify-content:space-between;margin-top:10px">${code0&&(this.doc().items?.[code0]||GR_STD[code0])?'<button class="btn sec" id="ueDel">Quitar tiempos</button>':'<span></span>'}<button class="btn" id="ueGo">Guardar</button></div></div>`;
+     let modo=e&&!r?'e':'t';const setM=x=>{modo=x;m.querySelectorAll('[data-uem]').forEach(b=>b.classList.toggle('on',b.dataset.uem===x));$('#ueT').classList.toggle('hide',x!=='t');$('#ueE').classList.toggle('hide',x!=='e')};setM(modo);
+     m.querySelectorAll('[data-uem]').forEach(b=>b.onclick=()=>setM(b.dataset.uem));
+     const tot=()=>{const v=['t','p','a'].map(k=>parseFloat(m.querySelector(`[data-uem2="${k}"]`).value)||0);const T=v[0]+v[1]+v[2];$('#ueTot').textContent=nf(T,2);$('#ueUS').textContent=nf(T/minUS,2)};
+     m.querySelectorAll('[data-uem2]').forEach(i=>i.oninput=tot);m.querySelectorAll('[data-uep]').forEach(i=>i.oninput=()=>{const n=parseFloat(i.value);if(n>=0)m.querySelector(`[data-uem2="${i.dataset.uep}"]`).value=(n/vh*60).toFixed(2);tot()});
+     m.querySelectorAll('[data-ues]').forEach(b=>b.onclick=()=>{const [k,v]=b.dataset.ues.split('|');m.querySelector(`[data-uem2="${k}"]`).value=v;tot()});tot();
+     const eqI=()=>{const b=$('#ueEq').value.trim().toUpperCase();const st=b?this.raw(b):null;$('#ueEqI').innerHTML=!b?'':st?`${esc(st[3]||'')} · ${nf(st[0],2)} + ${nf(st[1],2)} + ${nf(st[2],2)} min = <b>${nf((st[0]+st[1]+st[2])/minUS,2)} US</b>`:'<span class="poor">Ese código no tiene tiempos.</span>'};$('#ueEq').oninput=eqI;eqI();
+     if(!code0)$('#ueC').onchange=()=>pinta($('#ueC').value);
+     const del=$('#ueDel');if(del)del.onclick=async()=>{if(!confirm('¿Quitar los tiempos de '+code0+'? Va a sumar 0 US.'))return;await this.guardar(d=>{delete d.items[code0];d.quitados=[...new Set([...(d.quitados||[]),code0])]},'Tiempos quitados');m.remove()};
+     $('#ueGo').onclick=async()=>{const E=$('#ueErr');E.textContent='';const c=$('#ueC').value.trim().toUpperCase();if(!c){E.textContent='Escribí el código.';return}
+       if(modo==='e'){const b=$('#ueEq').value.trim().toUpperCase();if(!b||!this.raw(b)){E.textContent='Elegí un código que tenga tiempos.';return}if(b===c){E.textContent='No puede usar sus propios tiempos.';return}
+         await this.guardar(d=>{d.eq[c]=b;delete d.items[c]},'Equivalencia guardada: '+c+' usa '+b);m.remove();return}
+       const v=['t','p','a'].map(k=>m.querySelector(`[data-uem2="${k}"]`).value);if(v.some(x=>x===''||!(+x>=0))){E.textContent='Completá los minutos de los 3 sectores (0 si no pasa por ese sector).';return}
+       if(!(+v[0]+ +v[1]+ +v[2]>0)){E.textContent='El total no puede ser 0.';return}
+       await this.guardar(d=>{d.items[c]={t:+(+v[0]).toFixed(2),p:+(+v[1]).toFixed(2),a:+(+v[2]).toFixed(2),desc:$('#ueD').value.trim(),fam:vinc[c]||null,fuente:'cargado en el panel',ts:new Date().toISOString(),por:S.perfil?.nombre||null};if(d.eq[c])d.eq[c]=null;d.quitados=(d.quitados||[]).filter(x=>x!==c)},'US guardada para '+c);m.remove()}};
+   document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};pinta(code0)},
+ subir(){const i=document.createElement('input');i.type='file';i.accept='.xlsx,.xls';i.onchange=async()=>{const f=i.files[0];if(!f)return;if(typeof XLSX==='undefined'){toast('No se pudo cargar el lector de Excel. Recargá la página.');return}
+   let wb;try{wb=XLSX.read(await f.arrayBuffer(),{type:'array'})}catch(e){toast('No se pudo leer la planilla');return}
+   const lo=x=>nrm(String(x)).toLowerCase();const hoja=n=>wb.SheetNames.find(x=>lo(x).startsWith(n));const he=hoja('estandar');if(!he){toast('La planilla no tiene la hoja Estándares');return}
+   const rows=XLSX.utils.sheet_to_json(wb.Sheets[he],{defval:''});const num=v=>v===''||v==null?null:(typeof v==='number'?v:parseFloat(String(v).replace(',','.')));
+   const col=(r,...ns)=>{for(const k of Object.keys(r))if(ns.some(n=>lo(k).includes(n)))return r[k];return ''};
+   const items={};let n=0,dif=0,nuevos=0;for(const r of rows){const c=String(col(r,'codigo')).trim().toUpperCase();if(!c)continue;const t=num(col(r,'taller')),pp=num(col(r,'pintura')),a=num(col(r,'armado'));if(t==null&&pp==null&&a==null)continue;
+     const it={t:t||0,p:pp||0,a:a||0,desc:String(col(r,'descrip')||''),fam:String(col(r,'familia')||'')||null,fuente:'planilla '+f.name,ts:new Date().toISOString(),por:S.perfil?.nombre||null};const cur=this.raw(c);
+     if(!cur)nuevos++;else if(Math.abs(cur[0]-it.t)>0.005||Math.abs(cur[1]-it.p)>0.005||Math.abs(cur[2]-it.a)>0.005)dif++;else continue;items[c]=it;n++}
+   const eq={};const hq=hoja('equivalen');if(hq)for(const r of XLSX.utils.sheet_to_json(wb.Sheets[hq],{defval:''})){const a=String(col(r,'producido')).trim().toUpperCase(),b=String(col(r,'usa')).trim().toUpperCase();if(a&&b&&this.eq(a)!==b)eq[a]=b}
+   if(!n&&!Object.keys(eq).length){toast('La planilla no trae cambios: los tiempos son los mismos');return}
+   if(!confirm(`Planilla ${f.name}:\n\n- ${nuevos} códigos nuevos\n- ${dif} códigos con tiempos distintos\n- ${Object.keys(eq).length} equivalencias nuevas o cambiadas\n\n¿Actualizar las unidades spot?`))return;
+   await this.guardar(d=>{Object.assign(d.items,items);Object.assign(d.eq,eq);d.quitados=(d.quitados||[]).filter(x=>!items[x])},'Unidades spot actualizadas: '+n+' códigos')};i.click()},
+ descargar(){if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel. Recargá la página.');return}const minUS=GR.c().minUS;
+   const rows=[['Código','Descripción','Familia','Min Taller','Min Pintura','Min Armado','Hs estándar por unidad','US por unidad','Origen']];
+   for(const k of this.todos()){const r=this.raw(k);const T=r[0]+r[1]+r[2];rows.push([k,r[3],r[4]?.fam||(S.M.vinculos?.items||{})[k]||'',r[0],r[1],r[2],+(T/60).toFixed(4),+(T/minUS).toFixed(3),r[4]?(r[4].fuente||'panel'):'planilla del premio'])}
+   const eq=[['Código producido','Usa el estándar de']];for(const [a,b] of Object.entries({...GR_EQ,...(this.doc().eq||{})}))if(b)eq.push([a,b]);
+   const wb=XLSX.utils.book_new();const s1=XLSX.utils.aoa_to_sheet(rows);s1['!cols']=[16,44,22,10,10,10,12,10,26].map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,s1,'Estándares');XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(eq),'Equivalencias');
+   XLSX.writeFile(wb,'Unidades spot '+today()+'.xlsx')}
+};
 /* MAESTRO */
 V.maestro={mount(){$('#main').innerHTML=header('Maestro','Listas de materiales, centros de trabajo y personal. Es la base de todo el sistema y sigue la estructura de Odoo Fabricación: producto, lista de materiales, componentes y operaciones.')+
   `<div class="panel row" style="align-items:center;justify-content:space-between;padding:12px 16px"><span class="note" style="flex:1 1 300px">Podés editar los maestros acá o en Excel: descargá la planilla con los datos actuales, modificala y subila.</span><span class="row" style="gap:8px"><button class="btn sec sm" id="mDesc">Descargar planilla de maestros</button><button class="btn sm" id="mSub">Subir planilla de maestros</button></span></div>
-  <div class="tabs"><button class="on" data-mt="prod">Listas de materiales</button><button data-mt="cen">Máquinas</button><button data-mt="per">Personal</button><button data-mt="mot">Motivos de parada</button><button data-mt="acc">Usuarios y permisos</button></div><div id="mm"></div>`;
+  <div class="tabs"><button class="on" data-mt="prod">Listas de materiales</button><button data-mt="cen">Máquinas</button><button data-mt="per">Personal</button><button data-mt="mot">Motivos de parada</button><button data-mt="us">Unidades spot</button><button data-mt="acc">Usuarios y permisos</button></div><div id="mm"></div>`;
   document.querySelectorAll('[data-mt]').forEach(b=>b.onclick=()=>{if(this.tab==='prod'&&b.dataset.mt!=='prod'&&BOM.dirty&&!confirm('Hay cambios sin guardar en la lista de materiales. ¿Salir igual?'))return;document.querySelectorAll('[data-mt]').forEach(x=>x.classList.toggle('on',x===b));this.tab=b.dataset.mt;this.update()});
   $('#mDesc').onclick=()=>planillaMaestros();$('#mSub').onclick=()=>{if(BOM.dirty){toast('Guardá o descartá los cambios de la lista de materiales antes de subir la planilla');return}subirMaestros()};
   this.tab=this.tab||'prod';document.querySelectorAll('[data-mt]').forEach(x=>x.classList.toggle('on',x.dataset.mt===this.tab));this.update()},
@@ -961,6 +1063,7 @@ update(){const box=$('#mm');if(!box)return;
     const g=$('#moGo');if(g)g.onclick=async()=>{const it=M.map((m,i)=>{const c=box.querySelector(`[data-mc="${i}"]`).value;return {...m,nombre:box.querySelector(`[data-mn="${i}"]`).value.trim()||m.nombre,grupo:box.querySelector(`[data-mg="${i}"]`).value.trim(),categoria:c,odoo_loss:loss[c]}});const nd={...D,items:it};const df=$('#moDef');if(df)nd.defectos=df.value.split('\n').map(x=>x.trim()).filter(Boolean);
       try{await S.db.doc('maestro/'+doc).set(nd);toast('Motivos guardados')}catch(e){toast('No se pudo guardar')}};return}
   if(this.tab==='acc'){box.innerHTML=htmlAccesos();bindAccesos(box);return}
+  if(this.tab==='us'){if(box.querySelector('#usQ')&&box.contains(document.activeElement)&&['INPUT','SELECT'].includes(document.activeElement.tagName))return;USM.render(box);return}
   if(this.tab==='per'){const P=S.M.personal?.items||[];const ed=S.puedeMaestro;
     box.innerHTML=`<section class="panel"><div class="pzh" style="align-items:center"><h2 style="margin:0 0 10px">Personal</h2>${ed?'<button class="btn sec sm" id="pLeg">Traer legajos del panel de horas</button>':''}</div>
     <div class="chips" style="margin-bottom:12px">${Object.entries(AREAS_PL).map(([k,v])=>{const n=personalDeArea(k).length;const d=personalDeArea(k).filter(p=>derivVigente(p.id,today())).length;return `<button class="chip ${this.fArea===k?'on':''}" data-fa="${k}" style="cursor:pointer;font:inherit">${v}: <b>${n}</b>${d?` <small class="note">(${d} derivados)</small>`:''}</button>`}).join('')}${this.fArea?'<button class="btn link" data-fa="">ver todos</button>':''}</div>
@@ -2360,7 +2463,7 @@ const GR={
  personMin(f,t,c){const {pres,par,xp,xh}=this.dayInfo(f,c);const J=this.jornada(c)||1;const fin=this.m(c.fin);let pm=pres*this.prodMin(t,c)*Math.max(0,1-par/J);
    if(xp>0&&xh>0&&t>fin){const X=xh*60,net=Math.max(0,X-(+c.refMin||0))/X;pm+=xp*Math.min(t-fin,X)*net}return pm},
  obj(pm,c){return c.objEf*pm/c.minUS},piso(pm,c){return c.pisoEf*pm/c.minUS},
- std(code){const k=GR_EQ[code]||code;return GR_STD[k]||null},
+ std(code){return USM.std(code)},
  lotes(f,c){c=c||this.c();const A=entArm().filter(e=>e.tipo==='armado'&&e.fecha===f).map(e=>{const st=this.std(String(e.code||'').toUpperCase());const q=+e.qty||0;
    return {code:e.code,qty:q,min:toMin(e.fin)??toMin(e.ini)??0,us:st?q*(st[0]+st[1]+st[2])/c.minUS:0,sin:!st}});
    /* piezas que salen de pintura ya armadas: suman con las unidades spot de su código */
@@ -3188,7 +3291,7 @@ const PLP={
 data(){return S.P.pintura_plan||{items:[]}},sel:new Set(),
 /* piezas que salen de pintura ya armadas: código del Objetivo (GR_STD) por producto y color */
 grSug(prod,color){const tk=String(prod||'').toUpperCase().replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);if(!tk.length)return null;const c=nrm(color);
-  const cand=[];for(const [k,v] of Object.entries(GR_STD)){const d=String(v[3]||'').toUpperCase();const dt=d.replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);
+  const cand=[];for(const [k,v] of USM.todos().map(k=>[k,USM.raw(k)])){const d=String(v[3]||'').toUpperCase();const dt=d.replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);
     if(!tk.every(t=>dt.some(x=>x===t||x.startsWith(t))))continue;if(c&&!String(color).toUpperCase().split('/').every(w=>{const q=nrm(w).slice(0,4);return !q||nrm(d).includes(q)}))continue;
     let p=d.length;if(/ACERO|CRUDA|CRUDO|MADERA|CENCO|\(ML\)|CON TUBO/.test(d))p+=100;cand.push([p,k])}
   cand.sort((a,b)=>a[0]-b[0]);return cand[0]?.[1]||null},
@@ -3285,7 +3388,7 @@ bind(B){const f=$('#plpF');if(f)f.onchange=async()=>{const x=f.files[0];f.value=
 vincularUS(iid){const x=(this.data().items||[]).find(i=>i.id===iid);if(!x||!S.canPlan)return;const sug=this.grSug(x.prod,x.color);const m=document.createElement('div');m.className='modal';
   m.innerHTML=`<div class="dlg" style="width:min(560px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Unidades spot de ${esc(x.prod)} ${esc(x.color)}</h2><button class="btn link" data-x>Cerrar</button></div>
    <p class="note">Elegí el código de la base del Objetivo (tiempos T + P + A). Cada pieza OK de esta orden suma esas unidades spot al Objetivo de armado del día.</p>
-   <label class="f">Código<input id="puC" list="puL" value="${esc(x.us_code||sug||'')}" autocomplete="off"></label><datalist id="puL">${Object.entries(GR_STD).map(([k,v])=>`<option value="${esc(k)}">${esc(v[3])}</option>`).join('')}</datalist>
+   <label class="f">Código<input id="puC" list="puL" value="${esc(x.us_code||sug||'')}" autocomplete="off"></label><datalist id="puL">${USM.todos().map(k=>[k,USM.raw(k)]).map(([k,v])=>`<option value="${esc(k)}">${esc(v[3])}</option>`).join('')}</datalist>
    <p class="note" id="puD"></p><div class="err" id="puE"></div><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn" id="puGo">Guardar</button></div></div>`;
   document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
   const show=()=>{const c=$('#puC').value.trim().toUpperCase();const st=GR.std(c);$('#puD').textContent=st?`${st[3]} · ${nf(this.usDe(c),2)} unidades spot por pieza`:'Ese código no está en la base del Objetivo.'};$('#puC').oninput=show;show();
@@ -4157,7 +4260,7 @@ route();
 }catch(e){}}
   S.aud=[];db.collection('auditoria').onSnapshot(q=>{S.aud=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==='auditoria')changed('datos')},()=>{});
   S.db=auditar(db);S.live=true;route();
-  for(const k of ['productos','centros','personal','motivos','vinculos','ventas','perfiles','colores','pintura_std','motivos_pintura','motivos_armado','armado_std','operarios_cfg']){
+  for(const k of ['productos','centros','personal','motivos','vinculos','ventas','perfiles','colores','pintura_std','motivos_pintura','motivos_armado','armado_std','operarios_cfg','us_std']){
     db.doc('maestro/'+k).onSnapshot(s=>{const prev=JSON.stringify(S.M[k]);S.M[k]=s.exists?s.data():null;S.loaded[k]=true;if(k==='perfiles'&&prev!==JSON.stringify(S.M[k])){route();return}changed('maestro')},()=>{})}
   for(const k of ['pendiente','parametros','stock','ajustes','objetivos','armado_plan','pintura_plan','pantalla','gratificacion','visibilidad'])db.doc('planificacion/'+k).onSnapshot(s=>{S.P[k]=s.exists?s.data():null;changed('plan')},()=>{});
   S.derivs=[];db.collection('derivaciones').onSnapshot(q=>{S.derivs=q.docs.map(d=>({id:d.id,...d.data()}));changed('datos')},()=>{});
