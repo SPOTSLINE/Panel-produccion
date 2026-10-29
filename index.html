@@ -1325,8 +1325,9 @@ function dibujarOT(d,x,ox,oy,i,tot,ren){
   d.setTextColor(60);d.setFontSize(F(8.5));d.setFont('helvetica','normal');d.text(`OP ${o.numero}  Req. ${o.fecha_req?o.fecha_req.split('-').reverse().join('/'):'-'}${o.prioridad==='urgente'?'  URGENTE':''}`,X(W-M),Y(11),{align:'right'});
   d.setTextColor(0);let y=26;
   const QS=ren?34:40;qrPDF(d,otURL(o,x.li,w.seq),X(W-M-QS),Y(19.5),QS*k);const WR=W-M-QS-3;
-  d.setFontSize(F(19));d.setFont('helvetica','bold');d.text(tipoNombre(w.tipo),X(M),Y(y));d.setFontSize(F(11));d.text(`Op. ${w.op}  (paso ${w.seq} de ${x.de})`,X(WR),Y(y),{align:'right'});y+=8.5;
-  d.setFontSize(F(11));d.text(d.splitTextToSize(`${o.articulo}   ${l.pieza}${l.codigo?'  ('+l.codigo+')':''}`,(WR-M)*k)[0],X(M),Y(y));y+=4;
+  d.setFont('helvetica','bold');d.setFontSize(F(17));const opT=`Op. ${w.op}`;const opW=d.getTextWidth(opT);d.text(opT,X(WR),Y(y),{align:'right'});
+  {const art=`${o.articulo}   ${l.pieza}`;const av=(WR-M)*k-opW-4;let fs=19;d.setFontSize(F(fs));while(fs>11&&d.getTextWidth(art)>av){fs-=0.5;d.setFontSize(F(fs))}d.text(d.splitTextToSize(art,av)[0],X(M),Y(y))}y+=7.5;
+  d.setFontSize(F(11));d.text(`${tipoNombre(w.tipo)}${l.codigo?'   ('+l.codigo+')':''}`,X(M),Y(y));y+=4;
   d.setFont('helvetica','normal');
   const boxes=[['A producir',nf(l.cant)],['Estándar',w.seg?nf(3600/w.seg)+' pz/h':'sin std'],['Horas est.',w.seg?nf(l.cant*w.seg/3600,1):'-'],['Viene de',x.prev?x.prev.op:'Mat. prima'],['Sigue en',x.next?x.next.op:'Pintura']];
   const bw=(WR-M)/boxes.length;boxes.forEach(([kk,v],j)=>{const bx=M+j*bw;d.setDrawColor(20);d.rect(X(bx),Y(y),bw*k,15*k);d.setFontSize(F(7.5));d.setTextColor(95);d.text(kk,X(bx+2),Y(y+5));d.setTextColor(0);d.setFont('helvetica','bold');d.setFontSize(F(11));d.text(String(v),X(bx+2),Y(y+12));d.setFont('helvetica','normal')});y+=18;
