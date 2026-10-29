@@ -2194,7 +2194,12 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
   if(!yo){M.innerHTML=`<div class="op1">${this.volver()}<h1>¿Quién sos?</h1><p class="lead">Elegilo una vez: este celular lo recuerda.</p><input id="oBus" class="opin" placeholder="Buscá por nombre o legajo" style="margin-bottom:10px" inputmode="search">${(()=>{const bt=p=>`<button class="opbig sec" data-yo="${esc(p.id)}" data-q="${esc(nrm(p.nombre+' '+(p.legajo||'')))}">${esc(p.nombre)}${p.legajo?`<br><small class="note">Legajo ${esc(p.legajo)}</small>`:''}</button>`;const srt=(a,b)=>a.nombre.localeCompare(b.nombre,'es');const T=P.filter(p=>areaDe(p.id)==='taller').sort(srt);const O=P.filter(p=>areaDe(p.id)!=='taller').sort((a,b)=>String(AREAS_PL[areaDe(a.id)]||'').localeCompare(String(AREAS_PL[areaDe(b.id)]||''),'es')||srt(a,b));const g=[...new Set(O.map(p=>areaDe(p.id)))];return `<div class="opgrid" id="oGr">${T.map(bt).join('')}</div>${g.map(a=>`<h3 class="oGh" style="margin:16px 0 6px">${esc(AREAS_PL[a]||a)}</h3><div class="opgrid oGr2">${O.filter(p=>areaDe(p.id)===a).map(bt).join('')}</div>`).join('')}`})()}</div>`;
     M.querySelectorAll('[data-yo]').forEach(b=>b.onclick=async()=>{const p=persObj(b.dataset.yo);if(cfgOp().pedirClave){if(!p?.pinq){alert('Todavía no tenés clave de operario. Pedile al supervisor que te la asigne.');return}const k=prompt(p.nombre+': ingresá tu clave de operario');if(k===null)return;const h=await hashPin(k);if(h!==p.pinq){alert('Clave incorrecta.');return}lsSet('yoh',h)}lsSet('yo',b.dataset.yo);this.render()});$('#oBus').oninput=()=>{const q=nrm($('#oBus').value);M.querySelectorAll('[data-yo]').forEach(b=>b.classList.toggle('hide',!!q&&!b.dataset.q.includes(q)));M.querySelectorAll('.oGr2').forEach(d=>{const vis=[...d.children].some(b=>!b.classList.contains('hide'));d.classList.toggle('hide',!vis);d.previousElementSibling?.classList.toggle('hide',!vis)})};return}
   let cur=CUR.get();if(cur&&cur.key&&!cur.keys)cur.keys=[cur.key];
-  {const ad=(S.activas||[]).find(x=>x.id===uidShort());if(cur&&ad&&ad.cerradaSup&&ad.activo===false&&ad.ini===cur.ini&&ad.fecha===cur.fecha){try{localStorage.removeItem('spl.encurso')}catch(e){}cur=null;toast('El supervisor cerró tu tarea anterior')}}
+  {const ad=(S.activas||[]).find(x=>x.id===uidShort());if(cur&&ad&&ad.cerradaSup&&ad.activo===false&&ad.ini===cur.ini&&ad.fecha===cur.fecha){try{localStorage.removeItem('spl.encurso')}catch(e){}cur=null;toast('El supervisor cerró tu tarea anterior')}
+   if(cur&&ad&&ad.activo&&ad.corrSup&&ad.yo===cur.yo&&ad.fecha===cur.fecha&&cur.corrTs!==ad.corrSup.ts&&(ad.corrSup.ini1===cur.ini||ad.corrSup.ini0===cur.ini||ad.ini===cur.ini)){
+     const k1=ad.key?ad.key.map(String).join('|'):'';const kc=cur.keys&&cur.keys[0]?cur.keys[0].map(String).join('|'):'';
+     if(ad.key&&k1!==kc){cur.keys=[ad.key];cur.key=ad.key;const cx=ctxKey(ad.key);if(cx)cur.titulo=`OP ${cx.o.numero} ${cx.l.pieza} ${cx.w.op}`;delete cur.parcial}
+     cur.maq=ad.maq;cur.ini=ad.ini;cur.corrTs=ad.corrSup.ts;try{localStorage.setItem('spl.encurso',JSON.stringify(cur))}catch(e){}
+     toast('El supervisor corrigió tu tarea: '+(ad.maq||'sin máquina'));if(cur.keys&&cur.keys.length&&this.keys.length&&!this.mismo(cur)){this.goKeys(cur.keys);return}}}
   const leg=(S.M.personal?.items||[]).find(p=>p.id===yo)?.legajo;
   const head=`${this.volver()}<div class="ophead"><span><b>${esc(persona(yo))}</b>${leg?` <span class="note">legajo ${esc(leg)}</span>`:''}</span><span class="row" style="gap:4px"><button class="btn link" id="oHoy">Mis registros de hoy</button><button class="btn link" id="oNo">No soy yo</button></span></div>`;
   const mio=cur&&cur.yo===yo?cur:null;
@@ -2763,9 +2768,9 @@ function detalleMaquina(id){const a=(S.activas||[]).find(x=>x.id===id);if(!a||!a
   const m=document.createElement('div');m.className='modal';
   m.innerHTML=`<div class="dlg" style="width:min(620px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0"><span class="dot ${a.tipo==='parada'?'dp':'dw'}"></span>${esc(a.maq||'Sin máquina')}: ${esc(persona(a.yo))}${leg?` <span class="note">legajo ${esc(leg)}</span>`:''}</h2><button class="btn link" data-x>Cerrar</button></div>
    <p class="note" style="margin:4px 0 10px">Empezó a las ${esc(a.ini)}${a.fecha!==today()?' del '+fmtD(a.fecha):''}.</p><div class="dlgb" style="border:0;padding:0">${tarea}${ritmo}${perf}</div>
-   <div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">${S.canPlan||S.puedeEditar?'<button class="btn sec" id="mdCer">Cerrar o corregir tarea</button>':''}${c?'<button class="btn" id="mdOp">Ver la OP</button>':''}<button class="btn sec" id="mdDia">Ver su día</button></div></div>`;
+   <div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px">${puedeEditReg()?'<button class="btn sec" id="mdCor">Corregir máquina u orden</button>':''}${S.canPlan||S.puedeEditar?'<button class="btn sec" id="mdCer">Cerrar o corregir tarea</button>':''}${c?'<button class="btn" id="mdOp">Ver la OP</button>':''}<button class="btn sec" id="mdDia">Ver su día</button></div></div>`;
   document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
-  {const bc=$('#mdCer');if(bc)bc.onclick=()=>{m.remove();cerrarActiva(a)}}
+  {const bc=$('#mdCer');if(bc)bc.onclick=()=>{m.remove();cerrarActiva(a)}}{const bk=$('#mdCor');if(bk)bk.onclick=()=>{m.remove();corregirActiva(a)}}
   const bo=$('#mdOp');if(bo)bo.onclick=()=>{m.remove();ir('plan',{tab:'curso',flt:'abiertas',tipo:'',sel:c.o.id})};
   $('#mdDia').onclick=()=>{m.remove();TT.tab='manual';location.hash='taller';setTimeout(()=>{const tf=$('#tFecha'),to=$('#tOp');if(tf&&to){tf.value=a.fecha;to.value=a.yo;V.taller.autoTimes(true);V.taller.update()}},80)}}
 /* cerrar o corregir una tarea que quedó abierta (el operario se olvidó de terminarla) */
@@ -2791,6 +2796,37 @@ function cerrarActiva(a){if(!(S.canPlan||S.puedeEditar)){toast('Necesitás permi
       const grupo=keys.length>1?'cama-'+newId():null;
       its=keys.map(({o,l,w},i)=>({id:newId(),tipo:'prod',operario:a.yo,centro:a.maq,centro_tipo:centroTipo(a.maq),op_id:o.id,op_numero:o.numero,articulo:o.articulo,pieza:l.pieza,seq:w.seq,paso:w.op,ini,fin,min:mins[i],qty:Q[i],scrap:Sc[i],seg_std:w.seg||null,std_min:w.seg?Q[i]*w.seg/60:null,fuera_plan:false,grupo,obs,origen:'qr',ts:new Date().toISOString()}))}
     if(busy('#caGo'))return;try{await writeParte(a.fecha,x=>x.push(...its));await cerrar();m.remove();toast('Tarea cerrada y registrada')}catch(e){E.textContent='No se pudo guardar. Probá de nuevo.'}finally{done('#caGo')}}}
+/* corregir una tarea en curso (se equivocaron de máquina u orden): solo planificador o administrador. El celular del operario toma la corrección solo */
+function corregirActiva(a){if(!puedeEditReg()){toast('Solo el planificador o el administrador pueden corregir tareas en curso');return}
+  const C=S.M.centros?.items||[];const tipos=[...new Set(C.map(c=>c.tipo))];const esPar=a.tipo==='parada';const k0=a.key?a.key.map(String).join('|'):'';const c0=a.key?ctxKey(a.key):null;
+  const ocupada=cod=>activasVivas().filter(x=>x.id!==a.id&&x.maq===cod).map(x=>persona(x.yo));
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="dlg" style="width:min(600px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Corregir tarea de ${esc(persona(a.yo))}</h2><button class="btn link" data-x>Cerrar</button></div>
+   <p class="note">Ahora figura en <b>${esc(a.maq||'sin máquina')}</b>${c0?`, OP ${esc(c0.o.numero)} ${esc(c0.l.pieza)} ${esc(c0.w.op)}`:esPar?', en parada':''}, desde las ${esc(a.ini)}. La tarea sigue en curso: el operario la termina normalmente desde su celular, que toma la corrección solo.</p>
+   <div class="row"><label class="f" style="flex:1 1 160px">Máquina<select id="crM"><option value="">Sin máquina</option>${tipos.map(t=>`<optgroup label="${esc(tipoNombre(t))}">${C.filter(c=>c.tipo===t).map(c=>`<option value="${esc(c.codigo)}" ${c.codigo===a.maq?'selected':''}>${esc(c.codigo)}</option>`).join('')}</optgroup>`).join('')}</select></label><label class="f" style="flex:0 1 120px">Inicio<input type="time" id="crI" value="${esc(a.ini)}"></label></div>
+   ${esPar?'':`<label class="f" style="margin-top:8px">Orden de trabajo<select id="crO"></select></label>`}<p class="note" id="crAv" style="margin:6px 0 0"></p>
+   <label class="f" style="margin-top:8px">Motivo de la corrección<input id="crMot" placeholder="opcional, ej.: se equivocó de máquina"></label><div class="err" id="crE"></div>
+   <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" data-x>Cancelar</button><button class="btn" id="crGo">Guardar corrección</button></div></div>`;
+  document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
+  const keyDe=(o,l,w)=>[o.id,o.lineas.indexOf(l),w.seq];
+  const fillO=()=>{const sel=$('#crO');if(!sel)return;const mq=$('#crM').value;const t=mq?centroTipo(mq):null;const prev=sel.value||k0;const ws=workordersFor(t);
+    const opts=ws.map(x=>({v:keyDe(x.o,x.l,x.w).map(String).join('|'),txt:`OP ${x.o.numero}  ${x.o.articulo}  ${x.l.pieza}  paso ${x.w.seq} (${x.w.op})  faltan ${nf(x.falta)}`}));
+    if(c0&&!opts.some(x=>x.v===k0)&&(!t||c0.w.tipo===t))opts.unshift({v:k0,txt:`OP ${c0.o.numero}  ${c0.o.articulo}  ${c0.l.pieza}  paso ${c0.w.seq} (${c0.w.op})  (la actual)`});
+    sel.innerHTML=`<option value="">${opts.length?'Elegí la orden de trabajo':'No hay órdenes pendientes para '+esc(t?tipoNombre(t):'esa máquina')}</option>`+opts.map(x=>`<option value="${esc(x.v)}">${esc(x.txt)}${x.v===k0?' ✓':''}</option>`).join('');
+    if(opts.some(x=>x.v===prev))sel.value=prev};
+  const aviso=()=>{const mq=$('#crM').value;const oc=mq?ocupada(mq):[];const msgs=[];if(oc.length)msgs.push(`Ojo: en ${mq} ya figura ${oc.join(', ')} trabajando.`);
+    const v=$('#crO')?.value;if(v&&v!==k0)msgs.push('Se cambia la orden de la tarea'+(a.extra?.length?' (las órdenes de la cama compartida se quitan)':'')+'.');$('#crAv').textContent=msgs.join(' ')};
+  fillO();aviso();$('#crM').onchange=()=>{fillO();aviso()};{const so=$('#crO');if(so)so.onchange=aviso}
+  $('#crGo').onclick=async()=>{const E=$('#crE');const maq=$('#crM').value;const ini=$('#crI').value;if(!/^\d{2}:\d{2}$/.test(ini)){E.textContent='Revisá la hora de inicio.';return}
+    let key=a.key||null;let extra=a.extra||null;const v=$('#crO')?.value;
+    if(!esPar){if(!v){E.textContent='Elegí la orden de trabajo.';return}if(v!==k0){const [oid,li,sq]=v.split('|');key=[oid,li,sq];extra=null}}const cambioOrden=!esPar&&v!==k0;
+    const cx=key?ctxKey(key):null;if(!esPar&&!cx){E.textContent='No encuentro esa orden.';return}
+    if(maq&&cx&&centroTipo(maq)!==cx.w.tipo&&!confirm(`${maq} es ${tipoNombre(centroTipo(maq))} y la operación es de ${tipoNombre(cx.w.tipo)}. ¿Guardar igual?`))return;
+    if(maq===(a.maq||'')&&ini===a.ini&&(esPar||v===k0)){E.textContent='No cambiaste nada.';return}
+    const d={...a};delete d.id;Object.assign(d,{maq,ini,key,extra:extra&&extra.length?extra:null,ts:new Date().toISOString(),
+      corrSup:{ts:new Date().toISOString(),por:S.perfil?.nombre||'administrador',motivo:$('#crMot').value.trim(),maq0:a.maq||'',ini0:a.corrSup?.ini0||a.ini,ini1:a.ini,key0:a.key||null}});
+    if(cambioOrden)d.parcial=null;if(cx)Object.assign(d,{op_id:cx.o.id,op_numero:cx.o.numero,articulo:cx.o.articulo,pieza:cx.l.pieza,seq:cx.w.seq,paso:cx.w.op});
+    if(busy('#crGo'))return;try{await S.db.collection('activas').doc(a.id).set(d);m.remove();toast('Tarea corregida: '+(maq||'sin máquina')+(cx?', OP '+cx.o.numero:''))}catch(e){E.textContent='No se pudo guardar. Probá de nuevo.'}finally{done('#crGo')}}}
 /* editar una orden ya lanzada: cantidad, fecha requerida, prioridad, notas y piezas por pieza */
 function editarOrden(o){if(!S.canPlan){toast('Solo el planificador puede editar órdenes');return}
   const m=document.createElement('div');m.className='modal';const L=o.lineas||[];
