@@ -1322,8 +1322,12 @@ function otsDe(os){const out=[];
 function dibujarOT(d,x,ox,oy,i,tot,ren){
   const k=148.5/210,W=210,H=148.5,M=9;const X=v=>ox+v*k,Y=v=>oy+v*k,F=v=>Math.max(6.2,v*k*1.12);const {o,l,w}=x;
   d.setTextColor(0);d.setFont('helvetica','bold');d.setFontSize(F(15));d.text('Orden de trabajo  '+x.num,X(M),Y(11.5));d.setDrawColor(0);d.setLineWidth(0.4);d.line(X(M),Y(15.5),X(W-M),Y(15.5));d.setLineWidth(0.2);
-  d.setTextColor(60);d.setFontSize(F(8.5));d.setFont('helvetica','normal');d.text(`OP ${o.numero}  Req. ${o.fecha_req?o.fecha_req.split('-').reverse().join('/'):'-'}${o.prioridad==='urgente'?'  URGENTE':''}`,X(W-M),Y(11),{align:'right'});
-  d.setTextColor(0);let y=26;
+  const urg=o.prioridad==='urgente';let xr=W-M;
+  if(urg){/* urgente: marco grueso en todo el borde y cartel lleno arriba a la derecha (se ve también en impresora blanco y negro) */
+    d.setDrawColor(200,0,0);d.setLineWidth(1.6);d.rect(X(2.5),Y(2.5),(W-5)*k,(H-5)*k);d.setLineWidth(0.2);
+    const bw=46,bh=10;d.setFillColor(200,0,0);d.roundedRect(X(W-M-bw),Y(3.2),bw*k,bh*k,1.2,1.2,'F');d.setTextColor(255);d.setFont('helvetica','bold');d.setFontSize(F(15));d.text('URGENTE',X(W-M-bw/2),Y(10.6),{align:'center'});xr=W-M-bw-3}
+  d.setTextColor(60);d.setFontSize(F(8.5));d.setFont('helvetica','normal');d.text(`OP ${o.numero}  Req. ${o.fecha_req?o.fecha_req.split('-').reverse().join('/'):'-'}`,X(xr),Y(11),{align:'right'});
+  d.setTextColor(0);d.setDrawColor(0);let y=26;
   const QS=ren?34:40;qrPDF(d,otURL(o,x.li,w.seq),X(W-M-QS),Y(19.5),QS*k);const WR=W-M-QS-3;
   d.setFont('helvetica','bold');d.setFontSize(F(17));const opT=`Op. ${w.op}`;const opW=d.getTextWidth(opT);d.text(opT,X(WR),Y(y),{align:'right'});
   {const art=`${o.articulo}   ${l.pieza}`;const av=(WR-M)*k-opW-4;let fs=19;d.setFontSize(F(fs));while(fs>11&&d.getTextWidth(art)>av){fs-=0.5;d.setFontSize(F(fs))}d.text(d.splitTextToSize(art,av)[0],X(M),Y(y))}y+=7.5;
