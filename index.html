@@ -302,7 +302,7 @@ body.tvon .app{display:none}
     <a href="#auditoria" data-v="auditoria">Registro de cambios</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-28 h</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-29 i</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -2455,7 +2455,7 @@ const GR={
  nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes()+d.getSeconds()/60},
  isWork(f){const d=new Date(f+'T12:00:00').getDay();return d>=1&&d<=5},
  weekStart(f){const d=new Date(f+'T12:00:00');d.setDate(d.getDate()-((d.getDay()-4+7)%7));return d.toISOString().slice(0,10)},
- topeEf(c){return c.objEf+0.1*c.pisoEf},
+ topeEf(c){return this.nivEf(c,2)}, /* línea verde = nivel 2 */
  /* minutos productivos desde el inicio del turno hasta t (sin el desayuno) */
  prodMin(t,c){const ini=this.m(c.inicio),fin=this.m(c.fin),r0=this.m(c.refIni),r1=r0+(+c.refMin||0);const e=Math.min(Math.max(t,ini),fin);const ov=Math.max(0,Math.min(e,r1)-Math.max(ini,r0));return Math.max(0,e-ini-ov)},
  jornada(c){return this.prodMin(this.m(c.fin),c)},
