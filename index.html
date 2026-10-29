@@ -1363,9 +1363,12 @@ function descargarOTs(L,fmt,ren){fmt=fmt||lsGet('otfmt')||'a6';ren=ren??(lsGet('
 function otPiezaURL(o,li){return appURL()+'#ot/p/'+encodeURIComponent(o.id)+'/'+li}
 function dibujarPieza(d,g,ox,oy,i,tot){const k=148.5/210,W=210,H=148.5,M=9;const X=v=>ox+v*k,Y=v=>oy+v*k,F=v=>Math.max(6.2,v*k*1.12);const {o,l,li}=g;
   d.setTextColor(0);d.setFont('helvetica','bold');d.setFontSize(F(15));d.text(`Hoja de pieza  OP ${o.numero}-${li+1}`,X(M),Y(11.5));d.setDrawColor(0);d.setLineWidth(0.4);d.line(X(M),Y(15.5),X(W-M),Y(15.5));d.setLineWidth(0.2);
-  d.setTextColor(60);d.setFont('helvetica','normal');d.setFontSize(F(8.5));d.text(`Req. ${o.fecha_req?o.fecha_req.split('-').reverse().join('/'):'-'}${o.prioridad==='urgente'?'  URGENTE':''}`,X(W-M),Y(11),{align:'right'});d.setTextColor(0);
+  const urg=o.prioridad==='urgente';let xr=W-M;
+  if(urg){d.setDrawColor(200,0,0);d.setLineWidth(1.6);d.rect(X(2.5),Y(2.5),(W-5)*k,(H-5)*k);d.setLineWidth(0.2);
+    const bw=46,bh=10;d.setFillColor(200,0,0);d.roundedRect(X(W-M-bw),Y(3.2),bw*k,bh*k,1.2,1.2,'F');d.setTextColor(255);d.setFont('helvetica','bold');d.setFontSize(F(15));d.text('URGENTE',X(W-M-bw/2),Y(10.6),{align:'center'});xr=W-M-bw-3}
+  d.setTextColor(60);d.setFont('helvetica','normal');d.setFontSize(F(8.5));d.text(`Req. ${o.fecha_req?o.fecha_req.split('-').reverse().join('/'):'-'}`,X(xr),Y(11),{align:'right'});d.setTextColor(0);d.setDrawColor(0);
   const QS=42;qrPDF(d,otPiezaURL(o,li),X(W-M-QS),Y(19),QS*k);d.setFontSize(F(6.5));d.setTextColor(90);d.text('Escaneá y elegí la operación',X(W-M-QS/2),Y(19+QS+2),{align:'center'});d.setTextColor(0);const WR=W-M-QS-4;
-  d.setFont('helvetica','bold');d.setFontSize(F(19));d.text(d.splitTextToSize(l.pieza,(WR-M)*k)[0],X(M),Y(27));d.setFontSize(F(11));d.text(d.splitTextToSize(`${o.articulo}${l.codigo?'  ('+l.codigo+')':''}`,(WR-M)*k)[0],X(M),Y(35));
+  d.setFont('helvetica','bold');{const art=`${o.articulo}   ${l.pieza}`;const av=(WR-M)*k;let fs=19;d.setFontSize(F(fs));while(fs>11&&d.getTextWidth(art)>av){fs-=0.5;d.setFontSize(F(fs))}d.text(d.splitTextToSize(art,av)[0],X(M),Y(27))}if(l.codigo){d.setFontSize(F(11));d.text(`Código ${l.codigo}`,X(M),Y(35))}
   d.setFont('helvetica','normal');d.setFontSize(F(10));d.text(`Cantidad: ${nf(l.cant)} piezas`,X(M),Y(42));if(o.notas){d.setFontSize(F(7));const t=d.splitTextToSize(o.notas,(WR-M)*k);d.text(t[0]+(t.length>1?'…':''),X(M),Y(48))}
   let y=Math.max(53,19+QS+6);const cols=[['Paso',14],['Operación',26],['Máquina',44],['Std pz/h',26],['Hs est.',22],['Viene de',30]];const tw=cols.reduce((a,c)=>a+c[1],0),sc=(W-2*M)/tw;
   d.setDrawColor(0);d.setLineWidth(0.35);d.rect(X(M),Y(y),(W-2*M)*k,7*k);d.setLineWidth(0.2);d.setFont('helvetica','bold');d.setFontSize(F(8));let cx=M;cols.forEach(([n,cw])=>{d.text(n,X(cx+1.5),Y(y+5));cx+=cw*sc});y+=7;d.setFont('helvetica','normal');
