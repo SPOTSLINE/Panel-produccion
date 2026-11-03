@@ -1287,6 +1287,12 @@ ofrecer(os){const b=document.createElement('div');b.className='banner';b.innerHT
 
 /* ---------- hojas de ruta ---------- */
 let DL=null;
+/* órdenes impresas: se abren para imprimir en vez de guardarse en Descargas; si el navegador bloquea la ventana, se imprime desde la misma pestaña */
+function imprimirPDF(nombre,d){let b=null;try{d.autoPrint({variant:'non-conform'})}catch(e){}
+  try{b=d.output('blob');const u=URL.createObjectURL(b);const w=window.open(u,'_blank');if(w){setTimeout(()=>URL.revokeObjectURL(u),120000);return}
+    const f=document.createElement('iframe');f.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';f.src=u;document.body.appendChild(f);
+    f.onload=()=>{setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print()}catch(e){guardarArchivo(nombre,b)}},300);setTimeout(()=>{f.remove();URL.revokeObjectURL(u)},120000)};return}
+  catch(e){guardarArchivo(nombre,b||d.output('blob'))}}
 async function guardarArchivo(filename,blob){
   if(!DL)DL=await window.claude?.use?.('downloads');
   if(!DL){try{const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(u);a.remove()},1500)}catch(e){toast('No se pudo descargar el archivo')}return}
@@ -1315,7 +1321,7 @@ function descargarPDF(os){
       y+=5}
     d.setFontSize(8);d.setTextColor(110);d.text('Completar a mano por cada tarea. Hay dos renglones extra por paso si la tarea se hace en varios turnos. Los datos se cargan en Taller.',M,203);d.setTextColor(0)});
   const name=os.length===1?`Hoja de ruta OP ${os[0].numero}.pdf`:`Hojas de ruta OP ${os[0].numero}-${os[os.length-1].numero}.pdf`;
-  guardarArchivo(name,d.output('blob'))}
+  imprimirPDF(name,d)}
 /* ---------- órdenes de trabajo: una por proceso, 4 por hoja A4 ---------- */
 function otsDe(os){const out=[];
   for(const o of os)o.lineas.forEach((l,li)=>{const n=l.ops.length;l.ops.forEach((w,wi)=>{
@@ -1353,13 +1359,13 @@ function descargarOTs(L,fmt,ren){fmt=fmt||lsGet('otfmt')||'a6';ren=ren??(lsGet('
   if(!L.length){toast('Marcá al menos una orden de trabajo');return}
   const {jsPDF}=window.jspdf;
   if(fmt==='a6'){const d=new jsPDF({orientation:'landscape',unit:'mm',format:[148.5,105]});L.forEach((x,i)=>{if(i)d.addPage([148.5,105],'landscape');dibujarOT(d,x,0,0,i,L.length,ren)});
-    const ops=[...new Set(L.map(x=>x.o.numero))];guardarArchivo((ops.length===1?`Ordenes de trabajo OP ${ops[0]}`:'Ordenes de trabajo')+` A6 (${L.length}).pdf`,d.output('blob'));return}
+    const ops=[...new Set(L.map(x=>x.o.numero))];imprimirPDF((ops.length===1?`Ordenes de trabajo OP ${ops[0]}`:'Ordenes de trabajo')+` A6 (${L.length}).pdf`,d);return}
   const d=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   L.forEach((x,i)=>{const q=i%4;if(i&&!q)d.addPage();
     if(!q){d.setDrawColor(150);d.setLineDashPattern([1.5,1.5],0);d.line(148.5,0,148.5,210);d.line(0,105,297,105);d.setLineDashPattern([],0)}
     dibujarOT(d,x,(q%2)*148.5,Math.floor(q/2)*105,i,L.length,ren)});
   const ops=[...new Set(L.map(x=>x.o.numero))];
-  guardarArchivo(ops.length===1?`Ordenes de trabajo OP ${ops[0]} (${L.length}).pdf`:`Ordenes de trabajo (${L.length}).pdf`,d.output('blob'))}
+  imprimirPDF(ops.length===1?`Ordenes de trabajo OP ${ops[0]} (${L.length}).pdf`:`Ordenes de trabajo (${L.length}).pdf`,d)}
 
 /* ---------- una hoja por pieza: el operario elige la operación ---------- */
 function otPiezaURL(o,li){return appURL()+'#ot/p/'+encodeURIComponent(o.id)+'/'+li}
@@ -1379,9 +1385,9 @@ function dibujarPieza(d,g,ox,oy,i,tot){const k=148.5/210,W=210,H=148.5,M=9;const
   d.setFontSize(F(8));d.text('Escaneá el QR con el celular, elegí la operación que vas a hacer y tocá EMPECÉ. Al terminar, TERMINÉ con la cantidad.',X(M),Y(Math.min(H-9,y+6)),{maxWidth:(W-2*M)*k});
   d.setFontSize(F(6));d.setTextColor(120);d.text(`Spotsline Fabricación. Emitida ${new Date().toLocaleDateString('es-AR')}. Hoja ${i+1} de ${tot}.`,X(M),Y(H-4));d.setTextColor(0)}
 function descargarPiezas(G,fmt){if(!window.jspdf){toast('No se pudo cargar el generador de PDF. Recargá la página.');return}if(!G.length){toast('Marcá al menos una orden de trabajo');return}const {jsPDF}=window.jspdf;
-  if(fmt==='a6'){const d=new jsPDF({orientation:'landscape',unit:'mm',format:[148.5,105]});G.forEach((g,i)=>{if(i)d.addPage([148.5,105],'landscape');dibujarPieza(d,g,0,0,i,G.length)});guardarArchivo(`Hojas por pieza A6 (${G.length}).pdf`,d.output('blob'));return}
+  if(fmt==='a6'){const d=new jsPDF({orientation:'landscape',unit:'mm',format:[148.5,105]});G.forEach((g,i)=>{if(i)d.addPage([148.5,105],'landscape');dibujarPieza(d,g,0,0,i,G.length)});imprimirPDF(`Hojas por pieza A6 (${G.length}).pdf`,d);return}
   const d=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});G.forEach((g,i)=>{const q=i%4;if(i&&!q)d.addPage();if(!q){d.setDrawColor(150);d.setLineDashPattern([1.5,1.5],0);d.line(148.5,0,148.5,210);d.line(0,105,297,105);d.setLineDashPattern([],0)}dibujarPieza(d,g,(q%2)*148.5,Math.floor(q/2)*105,i,G.length)});
-  guardarArchivo(`Hojas por pieza (${G.length}).pdf`,d.output('blob'))}
+  imprimirPDF(`Hojas por pieza (${G.length}).pdf`,d)}
 function agruparPorPieza(L){const m=new Map();for(const x of L){const k=x.o.id+'|'+x.li;if(!m.has(k))m.set(k,{o:x.o,l:x.l,li:x.li,items:[]});m.get(k).items.push(x)}return [...m.values()]}
 
 /* selector de órdenes de trabajo */
@@ -1425,7 +1431,7 @@ function hojaCama(L){if(!window.jspdf){toast('No se pudo cargar el generador de 
   y=Math.max(y+4,15+QS+7);d.setDrawColor(0);d.roundedRect(M,y,W-2*M,H-M-y-4,1.5,1.5);d.setFont('helvetica','bold');d.setFontSize(8.5);d.text('Cómo cargar',M+3,y+5);d.setFont('helvetica','normal');d.setFontSize(7.5);
   ['1. Escaneá el QR: se abren todas las órdenes de la cama juntas.','2. Elegí la máquina y tocá EMPECÉ.','3. Al terminar, tocá TERMINÉ y poné la cantidad buena de cada orden. El tiempo se reparte solo.'].forEach((t,j)=>d.text(t,M+3,y+10+j*4.2));
   d.setFontSize(5.5);d.setTextColor(120);d.text(`Spotsline Fabricación. Emitida ${new Date().toLocaleDateString('es-AR')}. ${L.length} órdenes.`,M,H-3);d.setTextColor(0);
-  guardarArchivo(`Cama ${tipoNombre(tipo)} (${L.length} ordenes).pdf`,d.output('blob'))}
+  imprimirPDF(`Cama ${tipoNombre(tipo)} (${L.length} ordenes).pdf`,d)}
 function descargarXLS(os){
   if(typeof XLSX==='undefined'){toast('No se pudo cargar el generador de Excel. Recargá la página.');return}
   const wb=XLSX.utils.book_new();
@@ -2523,21 +2529,25 @@ const GR={
     <span>Premio: <b class="${p>0?'good':p===0?'poor':''}">${p==null?'–':money(p)}</b> <span class="note">(eficiencia ${pct1(R.W.ef)})</span></span>
     <span>Hoy: <b>${nf(R.usHoy)}</b> US <span class="note">de ${nf(R.objDay)}</span> · <b class="${R.L.length?(R.diff>=0?'good':'poor'):''}">${R.L.length?(R.diff>=0?'+':'−')+nf(Math.abs(R.diff))+' US '+(R.diff>=0?'adelantados':'atrasados'):'sin armado registrado todavía'}</b></span>
     <span class="note" style="margin-left:auto">ver detalle ›</span></div>`},
- chart(R){const c=R.c,hoy=R.hoy;const W=1000,H=300,L=56,Rr=18,T=16,B=32;const ini=R.ini,finT=this.m(c.fin),fin=R.finD,r0=this.m(c.refIni),r1=r0+(+c.refMin||0);const span=Math.max(1,fin-ini);
-   const X=m=>L+(Math.min(Math.max(m,ini),fin)-ini)/span*(W-L-Rr);const ymaxRaw=Math.max(R.topeDay,R.usHoy,10)*1.08;const p10=Math.pow(10,Math.floor(Math.log10(ymaxRaw/4||1)));const n=ymaxRaw/4/p10;const step=(n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p10;const ymax=Math.ceil(ymaxRaw/step)*step;const Y=v=>T+(1-v/ymax)*(H-T-B);
+ /* umbral de hoy según el avance de la semana (mismo criterio que el reporte): lo que falta ÷ días que quedan, incluido hoy */
+ avance(R){const c=R.c,rows=R.W.rows||[];const hoyR=rows.find(r=>r.hoy);if(!hoyR||!R.objDay)return {k1:1,k2:1,meta:R.objDay,meta2:R.topeDay};
+   const U1=rows.reduce((a,r)=>a+r.obj,0),U2=U1*this.topeEf(c)/c.objEf;const ant=rows.filter(z=>z.f<hoyR.f).reduce((a,z)=>a+z.u,0);const k=rows.filter(z=>z.f>=hoyR.f).length||1;
+   const meta=Math.max(0,(U1-ant)/k),meta2=Math.max(0,(U2-ant)/k);return {meta,meta2,k1:meta/R.objDay,k2:R.topeDay?meta2/R.topeDay:1}},
+ chart(R){const c=R.c,hoy=R.hoy;const AV=this.avance(R);const W=1000,H=300,L=56,Rr=18,T=16,B=32;const ini=R.ini,finT=this.m(c.fin),fin=R.finD,r0=this.m(c.refIni),r1=r0+(+c.refMin||0);const span=Math.max(1,fin-ini);
+   const X=m=>L+(Math.min(Math.max(m,ini),fin)-ini)/span*(W-L-Rr);const ymaxRaw=Math.max(R.topeDay*AV.k2,R.objDay*AV.k1,R.usHoy,10)*1.08;const p10=Math.pow(10,Math.floor(Math.log10(ymaxRaw/4||1)));const n=ymaxRaw/4/p10;const step=(n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p10;const ymax=Math.ceil(ymaxRaw/step)*step;const Y=v=>T+(1-v/ymax)*(H-T-B);
    let s='';if(r1>r0&&r0<fin&&r1>ini)s+=`<rect x="${X(r0).toFixed(1)}" y="${T}" width="${(X(r1)-X(r0)).toFixed(1)}" height="${H-T-B}" fill="var(--panel2)"/><text x="${((X(r0)+X(r1))/2).toFixed(1)}" y="${T+14}" fill="var(--muted)" font-size="11" text-anchor="middle">desayuno</text>`;
    if(fin>finT)s+=`<rect x="${X(finT).toFixed(1)}" y="${T}" width="${(X(fin)-X(finT)).toFixed(1)}" height="${H-T-B}" fill="var(--lampbg)" opacity=".6"/><text x="${((X(finT)+X(fin))/2).toFixed(1)}" y="${T+14}" fill="var(--muted)" font-size="11" text-anchor="middle">horas extra</text>`;
    for(let v=0;v<=ymax+1e-9;v+=step){const y=Y(v).toFixed(1);s+=`<line x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}" stroke="var(--line2)"/><text x="${L-8}" y="${(+y+4).toFixed(1)}" fill="var(--muted)" font-size="12" text-anchor="end">${nf(v)}</text>`}
    for(let h=Math.ceil(ini/60)*60;h<=fin;h+=60){const x=X(h).toFixed(1);s+=`<text x="${x}" y="${H-B+19}" fill="var(--muted)" font-size="12" text-anchor="middle">${String(h/60).padStart(2,'0')}:00</text>`}
    const line=fn=>{const p=[];for(let m=ini;m<=fin;m+=5)p.push(X(m).toFixed(1)+','+Y(fn(m)).toFixed(1));p.push(X(fin).toFixed(1)+','+Y(fn(fin)).toFixed(1));return p.join(' ')};
    s+=`<polyline points="${line(m=>this.piso(this.personMin(hoy,m,c),c))}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="2 5"/>`;
-   s+=`<polyline points="${line(m=>this.topeEf(c)*this.personMin(hoy,m,c)/c.minUS)}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-dasharray="4 4"/>`;
-   s+=`<polyline points="${line(m=>this.obj(this.personMin(hoy,m,c),c))}" fill="none" stroke="var(--lamp)" stroke-width="3" stroke-dasharray="9 6"/>`;
+   s+=`<polyline points="${line(m=>AV.k2*this.topeEf(c)*this.personMin(hoy,m,c)/c.minUS)}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-dasharray="4 4"/>`;
+   s+=`<polyline points="${line(m=>AV.k1*this.obj(this.personMin(hoy,m,c),c))}" fill="none" stroke="var(--lamp)" stroke-width="3" stroke-dasharray="9 6"/>`;
    const end=Math.min(Math.max(R.t,ini),fin);let acc=0,d=`M${X(ini).toFixed(1)},${Y(0).toFixed(1)}`;for(const l of R.L){d+=` H${X(l.min).toFixed(1)}`;acc+=l.us;d+=` V${Y(acc).toFixed(1)}`}
    const xe=Math.max(X(end),R.L.length?X(R.L[R.L.length-1].min):X(ini));d+=` H${xe.toFixed(1)}`;
    s+=`<path d="${d}" fill="none" stroke="var(--ink)" stroke-width="3" stroke-linejoin="round"/>`;
-   if(R.t>=ini&&R.t<=fin){const x=X(R.t).toFixed(1);s+=`<line x1="${x}" x2="${x}" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="3 3"/><circle cx="${xe.toFixed(1)}" cy="${Y(acc).toFixed(1)}" r="6" fill="var(--ink)"/><circle cx="${x}" cy="${Y(R.objNow).toFixed(1)}" r="5" fill="var(--lamp)"/>`}
-   s+=`<text x="${W-Rr}" y="${(Y(R.objDay)-8).toFixed(1)}" fill="var(--ink)" font-size="13" text-anchor="end">umbral para cobrar ${nf(R.objDay)}</text>`;
+   if(R.t>=ini&&R.t<=fin){const x=X(R.t).toFixed(1);s+=`<line x1="${x}" x2="${x}" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="3 3"/><circle cx="${xe.toFixed(1)}" cy="${Y(acc).toFixed(1)}" r="6" fill="var(--ink)"/><circle cx="${x}" cy="${Y(R.objNow*AV.k1).toFixed(1)}" r="5" fill="var(--lamp)"/>`}
+   s+=`<text x="${W-Rr}" y="${(Y(R.objDay*AV.k1)-8).toFixed(1)}" fill="var(--ink)" font-size="13" text-anchor="end">umbral de hoy según el avance ${nf(R.objDay*AV.k1)}${Math.abs(AV.k1-1)>0.005?` (sin el avance: ${nf(R.objDay)})`:''}</text>`;
    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block" role="img" aria-label="US acumuladas del día contra el umbral">${s}</svg>`},
  weekChart(R){const c=R.c,rows=R.W.rows;const W=600,H=200,L=8,Rr=8,T=22,B=30,n=Math.max(1,rows.length),gw=(W-L-Rr)/n,bw=Math.min(64,gw*.55);
    /* mismo criterio que el reporte en PDF: el umbral de cada día se recalcula con lo hecho los días anteriores (lo que falta de la semana ÷ días que quedan) */
@@ -2581,7 +2591,7 @@ const GR={
     <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
      <div class="kpi"><b class="${R.atr>0?'poor':'good'}">${R.atr>0?'−':'+'}${nf(Math.abs(R.atr))} US</b><span>${R.atr>0?'de atraso':'de ventaja'} contra el umbral en lo que va de la semana</span><span class="note" style="display:block;margin-top:2px">${nf(Math.abs(R.atr)*c.minUS/60,1)} h de trabajo estándar</span></div>
      <div class="kpi"><b>${R.atr<=0?'Van al día':R.rec==null?'Sin días':'+'+nf(R.rec)+' US/día'}</b><span>para recuperarlo antes del cierre del miércoles</span><span class="note" style="display:block;margin-top:2px">${R.left} ${R.left===1?'día hábil':'días hábiles'}${R.restoHoy>0?' + lo que queda de hoy':''}</span></div></div>
-    <div data-vis="objetivo.minuto_a_minuto"><h3 style="margin:14px 0 4px">Hoy, minuto a minuto</h3><p class="note" style="margin:0 0 6px">Línea negra: US acumuladas · amarilla: umbral para cobrar · verde: siguiente nivel de premio · punteada gris: promedio actual (${pct1(c.pisoEf)}).</p>${this.chart(R)}</div>
+    <div data-vis="objetivo.minuto_a_minuto"><h3 style="margin:14px 0 4px">Hoy, minuto a minuto</h3><p class="note" style="margin:0 0 6px">Línea negra: US acumuladas · amarilla: umbral para cobrar de hoy, según el avance de la semana (igual que el gráfico de la semana) · verde: siguiente nivel de premio, con el mismo criterio · punteada gris: promedio actual (${pct1(c.pisoEf)}).</p>${this.chart(R)}</div>
     ${R.sin.length?`<p class="note poor" style="margin:6px 0 0">Sin tiempo estándar del tablero (suman 0 US): ${R.sin.map(esc).join(', ')}.</p>`:''}
     <div class="grid2" style="margin-top:14px"><div data-vis="objetivo.semana"><h3 style="margin:0 0 4px">Semana de premio (jue a mié)</h3><p class="note" style="margin:0 0 6px">Hechas ${nf(W.us)} US · umbral a hoy ${nf(W.objA)} · promedio actual ${nf(W.pisoA)}${W.rows.some(r=>this.dias()[r.f]?.usManual)?' · '+W.rows.filter(r=>this.dias()[r.f]?.usManual).map(r=>fmtD(r.f)).join(' y ')+': del PLAN ARMADO':''}</p>${this.weekChart(R)}</div>
      <div data-vis="objetivo.dia_en_planta"><h3 style="margin:0 0 4px">Día en planta (hoy)</h3><p style="margin:0 0 8px">${nf(di.pres)} productivos presentes${di.par?` · ${nf(di.par)} min parados`:''}${di.xp?` · ${nf(di.xp)} con ${nf(di.xh,1)} h extra`:''} <span class="note">${di.cargado?'':'(dotación del turno, sin cargar)'}</span></p>
