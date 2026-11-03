@@ -655,7 +655,8 @@ update(){if(!$('#dia'))return;TT.update();this.fillWO();this.calc();
   const bindA=()=>{const ab=D.querySelector('[data-cact]');if(ab)ab.onclick=()=>{const a=(S.activas||[]).find(x=>x.id===ab.dataset.cact);if(a)cerrarActiva(a)}};
   if(!es.length){D.innerHTML=banA+'<p class="note">Sin registros para este día. Empezá cargando la primera tarea.</p>';bindA();return}
   let html='',prevEnd=null,prodM=0,stdM=0,stdP=0,parM=0,gapM=0;
-  for(const e of es){const a=toMin(e.ini);if(prevEnd!=null&&a-prevEnd>5){gapM+=a-prevEnd;html+=`<div class="gap">${a-prevEnd} min sin registrar</div>`}
+  const oaM=abiertaOp?toMin(abiertaOp.ini):null;
+  for(const e of es){const a=toMin(e.ini);if(prevEnd!=null){const g=huecoSinAbierta(prevEnd,a,oaM);if(g>5){gapM+=g;html+=`<div class="gap">${g} min sin registrar</div>`}}
     prevEnd=Math.max(prevEnd??0,a+(diffMin(e.ini,e.fin)??(+e.min||0)));
     const puedeBorrar=puedeEditReg();const puedeEd=puedeEditReg();const btnEd=puedeEd?`<br><button class="btn link" data-edt="${esc(e._doc)}|${esc(e.id)}">Editar</button>`:'';
     if(e.tipo==='prod'){prodM+=minOp(e);if(e.std_min!=null){stdM+=+e.std_min;stdP+=+e.min||0}const ef=e.std_min!=null?e.std_min/e.min:null;
@@ -2695,8 +2696,10 @@ function marcarTips(root){root.querySelectorAll('th:not([data-tip]),.kpi>span:no
 /* ---------- Taller: pestañas Carga manual / Operarios / Todos los registros ---------- */
 function mutarParte(docId,mut){wq=wq.then(async()=>{const cur=S.partes.find(p=>p.id===docId);if(!cur)throw new Error('no existe');const {id,...rest}=cur;const items=JSON.parse(JSON.stringify(rest.items||[]));mut(items);
   await S.db.collection('partes').doc(docId).set({...rest,items,actualizado:new Date().toISOString()})});return wq}
-function resumenDia(es){let prod=0,std=0,stdM=0,par=0,qty=0,scrap=0,gap=0,prev=null;const ord=es.slice().sort((a,b)=>(toMin(a.ini)??0)-(toMin(b.ini)??0));
-  for(const e of ord){const a=toMin(e.ini);if(prev!=null&&a-prev>5)gap+=a-prev;prev=Math.max(prev??0,a+(diffMin(e.ini,e.fin)??(+e.min||0)));
+/* minutos de un hueco [p,a] que no tapa una tarea abierta desde oa (las tareas en curso no cuentan como sin registrar) */
+function huecoSinAbierta(p,a,oa){const g=a-p;if(oa==null||!isFinite(oa))return g;return g-Math.max(0,a-Math.max(p,oa))}
+function resumenDia(es,oa){let prod=0,std=0,stdM=0,par=0,qty=0,scrap=0,gap=0,prev=null;const ord=es.slice().sort((a,b)=>(toMin(a.ini)??0)-(toMin(b.ini)??0));
+  for(const e of ord){const a=toMin(e.ini);if(prev!=null){const g=huecoSinAbierta(prev,a,oa);if(g>5)gap+=g}prev=Math.max(prev??0,a+(diffMin(e.ini,e.fin)??(+e.min||0)));
     if(e.tipo==='prod'){prod+=minOp(e);if(e.std_min!=null){std+=+e.std_min;stdM+=+e.min||0}qty+=+e.qty||0;scrap+=+e.scrap||0}else if(motivo(e.motivo)?.categoria!=='pausa')par+=minOp(e)}
   return {prod,std,par,qty,scrap,gap,ef:stdM?std/stdM:null,ini:ord[0]?.ini,fin:ord.length?ord.reduce((m,e)=>toMin(e.fin)>toMin(m)?e.fin:m,ord[0].fin):null,n:es.length}}
 const TT={tab:'linea',f:today(),F:{d0:today(),d1:today(),op:'',tipo:'',reg:'',origen:'',q:''},
@@ -2708,7 +2711,7 @@ show(){document.querySelectorAll('[data-tt]').forEach(b=>b.classList.toggle('on'
 update(force){pendBar();if(this.tab==='linea'){const L=$('#tpL');if(L&&(force||!L.contains(document.activeElement))){L.innerHTML=htmlLineaTaller();bindObjetivoGen(L);bindPlanta(L)}}if(this.tab==='ops')this.ops(force);if(this.tab==='todos')this.todos(force)},
 ops(force){const b=$('#tpO');if(!b)return;if(!force&&b.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;const f=this.f;const E=entries().filter(e=>e.fecha===f);const A=activasVivas();
   const P=(S.M.personal?.items||[]).filter(p=>(p.activo!==false&&areaDe(p.id,f)==='taller')||E.some(e=>e.operario===p.id));
-  const cards=P.map(p=>{const es=E.filter(e=>e.operario===p.id);const r=resumenDia(es);const a=A.find(x=>x.yo===p.id);const h=S.horas?estadoHoras(p.id,f):null;return {p,r,a,es,h}}).sort((x,y)=>(y.a?4:0)+(y.r.n?2:0)-(y.h?.aus?1:0)-((x.a?4:0)+(x.r.n?2:0)-(x.h?.aus?1:0))||x.p.nombre.localeCompare(y.p.nombre));
+  const cards=P.map(p=>{const es=E.filter(e=>e.operario===p.id);const a=A.find(x=>x.yo===p.id);const r=resumenDia(es,a&&a.fecha===f?toMin(a.ini):null);const h=S.horas?estadoHoras(p.id,f):null;return {p,r,a,es,h}}).sort((x,y)=>(y.a?4:0)+(y.r.n?2:0)-(y.h?.aus?1:0)-((x.a?4:0)+(x.r.n?2:0)-(x.h?.aus?1:0))||x.p.nombre.localeCompare(y.p.nombre));
   const tot=resumenDia(E);const conCarga=cards.filter(c=>c.r.n).length;
   b.innerHTML=`<section class="panel"><div class="row" style="align-items:flex-end;justify-content:space-between"><label class="f" style="flex:0 1 180px">Día<input type="date" id="toF" value="${esc(f)}"></label>
    <span class="note">${conCarga} de ${P.length} operarios con carga, ${nf(tot.prod/60,1)} hs productivas, eficiencia <b class="${tot.ef>=.75?'good':tot.ef<.55?'poor':''}">${pct(tot.ef)}</b></span></div></section>
