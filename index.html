@@ -4407,5 +4407,6 @@ route();
   db.collection('partes').onSnapshot(q=>{S.partes=q.docs.map(d=>({id:d.id,...d.data()}));recompute();changed('datos')},()=>{});
 })();
 </script>
+<script src="reporte.js"></script>
 </body>
 </html>
