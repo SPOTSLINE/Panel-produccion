@@ -1,4 +1,4 @@
-/* Spotsline · Botón "Generar reporte" del avance semanal del premio (v1 2026-11-03)
+/* Spotsline · Botón "Generar reporte" del avance semanal del premio (v2 2026-11-03)
    Se agrega al panel con:  <script src="reporte.js"></script>  antes de </body>.
    Usa los datos en vivo del panel (GR.calc) y abre una hoja lista para imprimir / guardar en PDF. */
 (function(){
@@ -108,8 +108,11 @@
     b.title='Avance de la semana del premio, listo para imprimir';
     b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;font:700 14px Inter,Arial,sans-serif;padding:11px 18px;border-radius:999px;border:0;background:#1d8753;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;display:none';
     b.onclick=generar; document.body.appendChild(b);
-    var vis=function(){var ok=typeof GR!=='undefined'&&GR.calc&&!/tv/i.test(location.hash);b.style.display=ok?'block':'none'};
-    vis(); window.addEventListener('hashchange',vis); setInterval(vis,3000);
+    // solo en Planta en vivo → pestaña "Objetivo"
+    var vis=function(){var t=document.querySelector('button[data-ps="grat"]');
+      var ok=typeof GR!=='undefined'&&GR.calc&&/^#planta/.test(location.hash)&&t&&t.classList.contains('on')&&t.offsetParent!==null;
+      b.style.display=ok?'block':'none'};
+    vis(); window.addEventListener('hashchange',vis); document.addEventListener('click',function(){setTimeout(vis,50)},true); setInterval(vis,1000);
   }
   window.SPReporte={generar:generar,datos:datos,html:html};
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boton); else boton();
