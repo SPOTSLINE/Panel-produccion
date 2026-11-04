@@ -275,7 +275,7 @@ body.tvon .app{display:none}
 #tvK .tvrep{flex:1;width:100%;min-height:0;border:0;border-radius:1.2vh;background:#fff}
 #tvK .tvsub{font-size:2.2vh;color:#F5C400;font-weight:700;margin-bottom:1vh;text-transform:uppercase;letter-spacing:.05em}
 #tvK .tvrow{display:grid;grid-template-columns:minmax(0,9vw) 1fr auto;gap:1vw;align-items:center;padding:1vh .8vw;border-radius:.8vh;font-size:2.2vh;margin-bottom:.6vh;background:#1C1C1C}
-#tvK .tvrow b{font-size:2.4vh}#tvK .tvrow small{font-size:1.7vh;color:#A8A8A2}#tvK .tvrow em{font-style:normal;color:#C8C8C2;font-variant-numeric:tabular-nums;white-space:nowrap}#tvK .tvrow em i{font-style:normal;font-weight:700;margin-left:.6vw}
+#tvK .tvrow b{font-size:2.4vh}#tvK .tvrow small{font-size:1.7vh;color:#A8A8A2}#tvK .tvrow em{font-style:normal;color:#C8C8C2;font-variant-numeric:tabular-nums;white-space:nowrap}#tvK .tvrow em i{font-style:normal;font-weight:800;margin-left:1vw;font-size:3.6vh;display:inline-block;min-width:7vw;text-align:right;vertical-align:middle}
 #tvK .tvrow.live{border-left:.6vh solid #3FA877}#tvK .tvrow.par{border-left:.6vh solid #FF8A70}
 #tvK .tvvac{font-size:2.6vh;color:#A8A8A2;padding:2vh 0}
 #tvK .tvaviso{margin:auto;max-width:80vw;text-align:center;border-left:1vh solid #F5C400;padding:4vh 4vw;background:#1A1A1A;border-radius:1.4vh}#tvK .tvat{font-size:7vh;font-weight:800;margin-bottom:2vh}#tvK .tvax{font-size:3.6vh;line-height:1.35;color:#E6E6E1}#tvK .tvaviso .tvn{margin-top:2vh;font-size:2vh;color:#A8A8A2}
@@ -847,12 +847,12 @@ function tvArmado(){const c=cfgA('armado');const hoy=entArm().filter(e=>e.fecha=
   let u=0,s1=0,r1=0,par=0;for(const e of hoy){if(e.tipo==='armado'){u+=+e.qty||0;const s=stdArm(e.code);if(s){s1+=(+e.qty||0)/s;r1+=hhDe(e)}}else if(motivo(e.motivo)?.categoria!=='pausa')par+=+e.min||0}
   const pers=personalArmadoHoy().filter(p=>!(S.horas&&estadoHoras(p.id,today())?.aus)).length;const turno=Math.max(0,(diffMin(c.ini,c.fin)||0)-(c.pausa||0));
   let hp=pers*turno/60,auto=0;for(const e of hoy)if(e.tipo==='armado'){auto+=+e.qty||0;hp-=Math.max(1,(e.personas||[]).length)*(+e.min||0)/60}for(const o of A){if(hp<=0)break;const s=stdArm(o.code);if(!s)continue;const q=Math.min(o.falta,Math.floor(hp*s));auto+=q;hp-=q/s}auto=Math.round(auto/10)*10;
-  const H=hoy.filter(e=>e.tipo==='armado');const prodc={};for(const e of H){const k=(e.fam||'')+' '+(e.color||'');prodc[k]=(prodc[k]||0)+(+e.qty||0)}
+  const H=hoy.filter(e=>e.tipo==='armado');const prodc={},pef={};for(const e of H){const k=(e.fam||'')+' '+(e.color||'');prodc[k]=(prodc[k]||0)+(+e.qty||0);const st=stdArm(e.code);if(st){const x=pef[k]=pef[k]||{s:0,r:0};x.s+=(+e.qty||0)/st;x.r+=hhDe(e)}}
   const mo={};for(const e of hoy){if(e.tipo!=='armado'||!e.mesa)continue;const s=stdArm(e.code);if(!s)continue;const x=mo[e.mesa]=mo[e.mesa]||{s:0,r:0,u:0};x.s+=(+e.qty||0)/s;x.r+=hhDe(e);x.u+=+e.qty||0}
   const OU=objArmUS(c);return {a:'armado',nombre:'Armado',mesasOee:(c.mesas||[]).map(m=>{const x=mo[m];const v=T.find(t=>t.mesa===m);return {m,oee:x&&x.r?x.s/x.r:null,u:x?x.u:0,ahora:v?`${v.fam||''} ${v.color||''}`.trim():'',par:!!PA[m]}}),unid:'unidades spot',dec:0,obj:OU.obj,ok:OU.ok,frac:OU.fr,ef:r1?s1/r1:null,kpis:[[nf(u),'unidades armadas'],[nf(par),'min de parada'],[`${new Set(T.map(t=>t.mesa)).size} de ${(c.mesas||[]).length}`,'mesas trabajando']],
     horas:tvHoras(H,'armado',e=>+e.qty||0),
     ahora:[...Object.entries(PA).map(([m,v])=>({t:m,s:'parada: '+(v.motivoTxt||''),par:true,d:minDesde(v.fecha,v.ini)})),...(()=>{const AA=armandoAhora();const hm=m=>{m=Math.round(m);return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};return T.map(v=>{const x=AA.find(z=>z.mesa===v.mesa&&z.ini===v.ini);return {t:v.mesa,s:`${v.fam||''} ${v.color||''}`.trim(),p:(v.personas||[]).map(persona).join(', '),d:Math.max(0,minDesde(v.fecha,v.ini)-(v.pausa||0)),eta:x&&x.eta!=null?(x.manana?'no termina hoy':'termina '+hm(x.eta)):''}})})()],
-    hechas:Object.entries(prodc).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>({t:k,s:'',q:nf(v)+' u.'}))}}
+    hechas:Object.entries(prodc).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>({t:k,s:'',q:nf(v)+' u.',ef:pef[k]&&pef[k].r?pef[k].s/pef[k].r:null}))}}
 const TVA={taller:tvTaller,pintura:tvPintura,armado:tvArmado};
 function tvEstado(D){const frac=D.frac!=null?D.frac:tvFrac(D.a);const esp=D.obj*frac;const r=D.obj?D.ok/D.obj:0;const dif=D.ok-esp;const fm=x=>nf(x,D.dec);
   return {frac,esp,r,dif,fm,txt:!D.obj?'sin objetivo':frac===0?'todavía no arrancó el turno':dif>=0?'ADELANTADOS':'ATRASADOS'}}
