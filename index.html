@@ -4264,10 +4264,16 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-visedit]')
 new MutationObserver(()=>{if(VIS._r)return;VIS._r=requestAnimationFrame(()=>{VIS._r=null;VIS.apply()})}).observe(document.body,{childList:true,subtree:true});
 
 /* ---------- planificar pintura por color ---------- */
-const COLOR_TOK={NEGRO:['NTX','NEG','NE','NT','N'],BLANCO:['BTX','BLA','BL','BA','BT','B'],COBRE:['COB','CO','CB'],'GRIS PERLA':['GRIS','GRP','GP'],ROJO:['ROJ'],OXIDO:['OXI']};
-function colorDeCodigo(code,fam){const ov=S.M.colores?.codigos?.[code];if(ov!==undefined)return ov||null;const U=String(code).toUpperCase();const all=Object.entries(COLOR_TOK).flatMap(([c,ts])=>ts.map(t=>[t,c])).sort((a,b)=>b[0].length-a[0].length);
+const COLOR_TOK={NEGRO:['NEGRO','NTX','NEG','NE','NT','N'],BLANCO:['BLANCO','BTX','BLA','BL','BA','BT','B'],COBRE:['COBRE','COB','CO','CB'],'GRIS PERLA':['GRIS','GRP','GP'],ROJO:['ROJO','ROJ'],OXIDO:['OXIDO','OXI']};
+/* color por la descripción de unidades spot (si nombra un solo color) */
+const COLOR_DESC={NEGRO:/\bNEGR[OA]\b/,BLANCO:/\bBLANC[OA]\b/,COBRE:/\bCOBRE\b/,'GRIS PERLA':/\bGRIS\b/,ROJO:/\bROJ[OA]\b/,OXIDO:/\b(MARR[OÓ]N|[OÓ]XIDO)\b/};
+function colorDeCodigo(code,fam){const ov=S.M.colores?.codigos?.[code];if(ov!==undefined)return ov||null;const U=String(code).toUpperCase();
+  {const d=String((typeof USM!=='undefined'&&USM.raw(U)?.[3])||'').toUpperCase();const hit=Object.entries(COLOR_DESC).filter(([c,r])=>r.test(d)).map(x=>x[0]);if(hit.length===1)return hit[0]}
+  const all=Object.entries(COLOR_TOK).flatMap(([c,ts])=>ts.map(t=>[t,c])).sort((a,b)=>b[0].length-a[0].length);
   const fin='(?=$|[^A-Z]|GU|CEN|LED|XL|D4|CAC|E27|2L)';const nf=nrm(fam||'');const nu=nrm(U);
   if(nf&&nu.startsWith(nf)){const rest=nu.slice(nf.length);for(const [t,c] of all)if(new RegExp('^'+t+fin).test(rest))return c}
+  /* el sufijo del código manda (CAB580B1TNTX: B1 es la base, NTX es negro) */
+  for(const [t,c] of all)if(t.length>=2&&new RegExp(t+'(?:GU\\d*|CEN|LED|XL|D4|CAC|E27|2L)?[^A-Z]*$').test(U))return c;
   for(const [t,c] of all)if(new RegExp('[0-9\\-/]'+t+fin).test(U))return c;
   for(const [t,c] of all){if(t.length<2)continue;if(new RegExp('[A-Z0-9]'+t+'(?=$|[^A-Z]|E27|GU|CEN|LED|XL|2L)').test(U))return c}return null}
 function demandaPorColor(color){const vinc=S.M.vinculos?.items||{};const prod=S.M.productos?.items||{};const sh=compartidas();const D={};const sinColor=[];
