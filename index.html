@@ -2099,6 +2099,7 @@ function filaARegistro(x,fecha,op,nom){const base={Fecha:fecha,Operario:op?perso
   const [pz,seq]=x.pz.split('|');const w=S.M.productos.items[x.art].piezas.find(p=>p.pieza===pz).ops.find(o=>o.seq==seq);
   return {...base,Artículo:x.art,Pieza:pz,Paso:+seq,Operación:w.op,Cantidad:+x.qty||0,Scrap:+x.scrap||0,Motivo:''}}
 /* ---------- asignación diaria de máquinas (la arma el planificador el día anterior) ---------- */
+const durH=m=>{m=Math.round(m||0);return Math.floor(m/60)+':'+String(m%60).padStart(2,'0')};
 const ASG={f:null,d:null,cargado:null,
 proxHabil(f){let d=addDays(f,1);while([0,6].includes(new Date(d+'T12:00:00').getDay()))d=addDays(d,1);return d},
 gente(f){const it=this.d?.items||{};return (S.M.personal?.items||[]).filter(p=>p.activo!==false&&(this.todos||areaDe(p.id,f)==='taller'||(it[p.id]&&((it[p.id].maq||[]).some(Boolean)||it[p.id].aus||it[p.id].obs)))).sort((a,b)=>(areaDe(a.id,f)==='taller'?0:1)-(areaDe(b.id,f)==='taller'?0:1)||a.nombre.localeCompare(b.nombre,'es'))},
@@ -2115,7 +2116,7 @@ render(){const el=$('#tpA');if(!el||!this.d)return;const f=this.f;const P=this.g
   const hs=p=>{const h=S.horas?estadoHoras(p.id,f):null;return h&&h.k!=='sin'?`<span class="pill ${h.aus?'bad':''}">${esc(h.label||'')}</span>`:''};
   el.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:flex-end">
      <div class="row"><label class="f" style="flex:0 0 170px">Día<input type="date" id="asF" value="${esc(f)}"></label><span class="note" style="padding-bottom:9px">${esc(this.dia(f))}${this.d.actualizado?` · guardado ${esc(new Date(this.d.actualizado).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}))}${this.d.por?' por '+esc(this.d.por):''}`:' · sin guardar'}</span></div>
-     <div class="row" style="gap:6px">${ed?'<button class="btn sec sm" id="asCopy">Copiar del día anterior</button>':''}<button class="btn sec sm" id="asPrint">Imprimir</button><button class="btn sec sm" id="asPdf">Descargar PDF</button>${ed?'<button class="btn" id="asSave">Guardar</button>':''}</div></div>
+     <div class="row" style="gap:6px">${ed?'<button class="btn sec sm" id="asCopy">Copiar del día anterior</button>':''}<select id="asFmt" style="width:auto" title="Cómo se imprime"><option value="general">Planilla general</option><option value="persona">Una hoja por persona</option></select><button class="btn sec sm" id="asPrint">Imprimir</button>${ed?'<button class="btn" id="asSave">Guardar</button>':''}</div></div>
     ${ed?'':'<p class="note">Solo el planificador puede cambiar la asignación.</p>'}<label class="note" style="display:inline-flex;gap:6px;align-items:center;margin-top:8px"><input type="checkbox" id="asTodos" ${this.todos?'checked':''} style="width:auto"> Mostrar el personal de todos los sectores</label>
     <p class="note" style="margin:10px 0 6px">${P.length} personas del taller · ${sinAsig.length?`<b class="poor">${sinAsig.length} sin máquina</b>`:'todas con máquina'} · máquinas libres: ${libres.length?esc(libres.join(', ')):'ninguna'}${this.sucio?' · <b class="poor">hay cambios sin guardar</b>':''}</p>
     <div class="tw"><table class="asg"><tr><th>Persona</th><th>Sector habitual</th><th>Asistencia</th><th>No viene</th><th>Máquina / sector</th><th>2.ª máquina / sector</th><th>Orden de trabajo</th><th>Tarea / observaciones</th><th></th></tr>
@@ -2133,7 +2134,7 @@ render(){const el=$('#tpA');if(!el||!this.d)return;const f=this.f;const P=this.g
   el.querySelectorAll('[data-ao]').forEach(i=>i.oninput=()=>{this.it(i.dataset.ao).obs=i.value;this.sucio=true});
   el.querySelectorAll('[data-aw]').forEach(s=>s.onchange=()=>{const x=this.it(s.dataset.aw);x.ord=s.value||'';if(s.value){const [oid,pz,sq]=s.value.split('|');const o=S.ordenes.find(z=>z.id===oid);const w=o?.lineas.find(l=>l.pieza===pz)?.ops.find(z=>z.seq==sq);x.ordTxt=o?`OP ${o.numero} ${o.articulo} ${pz}${w?' '+w.op:''}`:''}else x.ordTxt='';this.sucio=true;this.render()});
   const sv=$('#asSave');if(sv)sv.onclick=()=>this.guardar();const cp=$('#asCopy');if(cp)cp.onclick=()=>this.copiar();
-  $('#asPrint').onclick=()=>this.imprimir();$('#asPdf').onclick=()=>this.pdf()},
+  $('#asPrint').onclick=()=>this.pdf()},
 async guardar(){if(busy('#asSave'))return;try{const items={};for(const [k,v] of Object.entries(this.d.items))if(v.aus||(v.maq||[]).some(Boolean)||v.obs||v.ord)items[k]={maq:(v.maq||[]).filter(Boolean),obs:v.obs||'',aus:!!v.aus,...(v.ord?{ord:v.ord,ordTxt:v.ordTxt||''}:{})};
     const doc={fecha:this.f,items,actualizado:new Date().toISOString(),por:(typeof quienSoy==='function'?(quienSoy()?.quien||''):'')};await S.db.doc('asignacion/'+this.f).set(doc);this.d=JSON.parse(JSON.stringify(doc));this.sucio=false;toast('Asignación guardada');this.render()}
   catch(e){toast('No se pudo guardar')}finally{done('#asSave')}},
@@ -2141,24 +2142,55 @@ async copiar(){let f=this.f,d=null;for(let i=0;i<10&&!d;i++){f=addDays(f,-1);d=a
   if(Object.keys(this.d.items||{}).length&&!confirm(`Se reemplaza lo cargado por la asignación del ${fmtD(f)}. ¿Seguir?`))return;
   this.d.items={};for(const [k,v] of Object.entries(d.items||{}))this.d.items[k]={maq:[...(v.maq||[])],obs:v.obs||'',aus:false,...(v.ord?{ord:v.ord,ordTxt:v.ordTxt||''}:{})};this.sucio=true;toast('Copiado del '+fmtD(f)+'. Revisá y guardá.');this.render()},
 filas(){const P=this.gente(this.f);return P.map(p=>{const x=this.d.items[p.id]||{};return {nombre:p.nombre,maq:(x.maq||[]).filter(Boolean).map(v=>this.lbl(v)),obs:[x.ordTxt||'',x.obs||''].filter(Boolean).join(' · '),aus:!!x.aus,sec:areaDe(p.id,this.f)}}).filter(r=>r.sec==='taller'||r.maq.length||r.aus||r.obs)},
-imprimir(){const F=this.filas();const C=(S.M.centros?.items||[]).map(c=>c.codigo);const usadas=new Set(F.filter(r=>!r.aus).flatMap(r=>r.maq));
+/* datos para imprimir: por persona, con sus tareas del día en orden (si se cargaron en el plan por persona) */
+detalle(){const P=this.gente(this.f);const hh=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(Math.round(m%60)).padStart(2,'0');const out=[];
+  for(const p of P){const x=this.d.items[p.id]||{};const sec=areaDe(p.id,this.f);const maq=(x.maq||[]).filter(Boolean).map(v=>this.lbl(v));const tt=(x.tareas||[]).filter(z=>z.ord&&(+z.qty||0)>0);
+    if(!(sec==='taller'||maq.length||x.aus||x.obs||x.ord||tt.length))continue;let T=[],used=0,disp=0;
+    if(!x.aus&&tt.length&&typeof this.calc==='function'){const C=this.calc(p.id);used=C.used;disp=C.disp;T=C.rows.filter(r=>r.z.ord&&(+r.z.qty||0)>0).map(r=>{const [oid,pz,sq]=String(r.z.ord).split('|');const o=(S.ordenes||[]).find(z=>z.id===oid);const w=o?.lineas.find(l=>l.pieza===pz)?.ops.find(z=>z.seq==sq);
+      return {hor:hh(r.ini)+'–'+hh(r.fin),op:o?'OP '+o.numero:'',art:o?o.articulo:'',pieza:pz||r.z.txt||'',oper:w?w.op+' (paso '+w.seq+')':'',qty:+r.z.qty||0,hs:r.z.seg?durH(r.min):'s/tiempo'}})}
+    out.push({nombre:p.nombre,leg:p.legajo||'',maq,aus:!!x.aus,ord:x.ordTxt||'',obs:x.obs||'',T,used,disp,hx:+x.hx||0})}
+  return out},
+resumen(D){const C=(S.M.centros?.items||[]).map(c=>c.codigo);const act=D.filter(r=>!r.aus);const usadas=new Set(act.flatMap(r=>r.maq));const used=act.reduce((a,r)=>a+r.used,0),disp=act.reduce((a,r)=>a+r.disp,0);
+  return {act,aus:D.filter(r=>r.aus),libres:C.filter(c=>!usadas.has(c)),used,disp,sinMaq:act.filter(r=>!r.maq.length)}},
+imprimir(){const D=this.detalle();const R=this.resumen(D);const porP=$('#asFmt')?.value==='persona';
   let pr=$('#prt');if(!pr){pr=document.createElement('div');pr.id='prt';document.body.appendChild(pr)}
-  const act=F.filter(r=>!r.aus);const aus=F.filter(r=>r.aus);
-  pr.innerHTML=`<h1>Asignación de máquinas y sectores</h1><p class="sub">${esc(this.dia(this.f))}${this.sucio?' (borrador sin guardar)':''}</p>
-   <table><tr><th style="width:34%">Persona</th><th style="width:22%">Máquina / sector</th><th>Tarea / observaciones</th></tr>${act.map(r=>`<tr><td>${esc(r.nombre)}</td><td class="m">${esc(r.maq.join(' + ')||'—')}</td><td>${esc(r.obs)}</td></tr>`).join('')}</table>
-   ${aus.length?`<h2>No vienen</h2><p>${esc(aus.map(r=>r.nombre).join(', '))}</p>`:''}
-   <h2>Máquinas sin asignar</h2><p>${esc(C.filter(c=>!usadas.has(c)).join(', ')||'ninguna')}</p>`;
+  const tab=r=>r.T.length?`<table class="at"><tr><th style="width:15%">Horario</th><th style="width:11%">Orden</th><th>Artículo · pieza</th><th style="width:15%">Operación</th><th style="width:9%" class="n">Cantidad</th><th style="width:8%" class="n">Horas</th><th style="width:10%">Hechas</th></tr>${r.T.map(t=>`<tr><td>${esc(t.hor)}</td><td><b>${esc(t.op)}</b></td><td>${esc(t.art)} · <b>${esc(t.pieza)}</b></td><td>${esc(t.oper)}</td><td class="n"><b>${nf(t.qty)}</b></td><td class="n">${esc(t.hs)}</td><td></td></tr>`).join('')}</table>`
+    :(r.ord?`<p class="ao"><b>Orden:</b> ${esc(r.ord)}</p>`:'');
+  const blk=r=>`<div class="ap${porP?' pg':''}">${porP?`<p class="sub">Asignación del ${esc(this.dia(this.f))}${this.sucio?' (borrador sin guardar)':''}</p>`:''}<div class="ah"><span class="an">${esc(r.nombre)}${r.leg?` <small>leg. ${esc(r.leg)}</small>`:''}</span><span class="am">${esc(r.maq.join(' + ')||'sin máquina')}</span>${r.disp?`<span class="ahs">${durH(r.used)} de ${durH(r.disp)} h${r.hx?` (con ${r.hx} h extra)`:''}</span>`:''}</div>${tab(r)}${r.obs?`<p class="ao"><b>Obs.:</b> ${esc(r.obs)}</p>`:''}${porP?'<p class="af">Observaciones del operario: ______________________________________________</p>':''}</div>`;
+  pr.innerHTML=`<style>#prt .ap{border:1.5px solid #000;border-radius:6px;padding:8px 10px;margin:0 0 10px;page-break-inside:avoid;break-inside:avoid}#prt .ap.pg{border:0;padding:0;page-break-after:always;break-after:page}#prt .ah{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}#prt .an{font-size:14pt;font-weight:700}#prt .an small{font-weight:400;font-size:10pt;color:#444}#prt .am{font-size:15pt;font-weight:800}#prt .ahs{margin-left:auto;font-size:11pt}#prt .at th,#prt .at td{font-size:10.5pt;padding:4px 6px}#prt .at .n{text-align:right}#prt .at td:first-child{white-space:nowrap}#prt .ao{margin:6px 0 0;font-size:11pt}#prt .af{margin-top:24px;font-size:11pt}
+   #prt .ap.pg .an{font-size:22pt}#prt .ap.pg .am{font-size:22pt}#prt .ap.pg .at th,#prt .ap.pg .at td{font-size:13pt;padding:8px}#prt .res{font-size:11pt;margin:0 0 12px}</style>
+   ${porP?'':`<h1>Asignación de máquinas y tareas</h1><p class="sub">${esc(this.dia(this.f))}${this.sucio?' (borrador sin guardar)':''}</p><p class="res">${R.act.length} personas${R.disp?` · ${durH(R.used)} de ${durH(R.disp)} h planificadas (${Math.round(R.used/R.disp*100)}%)`:''}${R.aus.length?` · no vienen: <b>${esc(R.aus.map(r=>r.nombre).join(', '))}</b>`:''}</p>`}
+   ${R.act.map(blk).join('')}
+   ${porP?'':`<h2>Máquinas sin asignar</h2><p>${esc(R.libres.join(', ')||'ninguna')}</p>`}`;
   document.body.classList.add('imprimiendo');const fin=()=>{document.body.classList.remove('imprimiendo');window.removeEventListener('afterprint',fin)};window.addEventListener('afterprint',fin);
   try{window.print()}catch(e){toast('No se pudo abrir la impresión: usá Descargar PDF')}setTimeout(fin,60000)},
-pdf(){const J=window.jspdf?.jsPDF;if(!J){toast('No se pudo cargar el generador de PDF. Recargá la página.');return}
-  const doc=new J({unit:'mm',format:'a4'});const F=this.filas();const act=F.filter(r=>!r.aus);const aus=F.filter(r=>r.aus);const C=(S.M.centros?.items||[]).map(c=>c.codigo);const usadas=new Set(act.flatMap(r=>r.maq));
-  let y=16;doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('Asignación de máquinas y sectores',14,y);y+=7;doc.setFont('helvetica','normal');doc.setFontSize(11);doc.text(this.dia(this.f)+(this.sucio?' (borrador sin guardar)':''),14,y);y+=8;
-  const X=[14,80,124],W=[66,44,72];const head=()=>{doc.setFillColor(235,235,235);doc.rect(14,y-5,182,8,'F');doc.setFont('helvetica','bold');doc.setFontSize(11);['Persona','Máquina / sector','Tarea / observaciones'].forEach((h,i)=>doc.text(h,X[i]+2,y));y+=6;doc.setFont('helvetica','normal')};head();
-  for(const r of act){const ob=doc.splitTextToSize(r.obs||'',W[2]-4);const h=Math.max(9,ob.length*5+4);if(y+h>285){doc.addPage();y=16;head()}
-    doc.rect(14,y-3,182,h);doc.line(X[1],y-3,X[1],y-3+h);doc.line(X[2],y-3,X[2],y-3+h);doc.setFontSize(11);doc.text(r.nombre,X[0]+2,y+3);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.text(r.maq.join(' + ')||'—',X[1]+2,y+3);doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(ob,X[2]+2,y+3);y+=h}
-  y+=6;doc.setFontSize(11);if(aus.length){doc.setFont('helvetica','bold');doc.text('No vienen:',14,y);doc.setFont('helvetica','normal');const t=doc.splitTextToSize(aus.map(r=>r.nombre).join(', '),150);doc.text(t,40,y);y+=t.length*5+3}
-  doc.setFont('helvetica','bold');doc.text('Máquinas sin asignar:',14,y);doc.setFont('helvetica','normal');const t2=doc.splitTextToSize(C.filter(c=>!usadas.has(c)).join(', ')||'ninguna',140);doc.text(t2,58,y);
-  guardarArchivo('Asignacion maquinas '+this.f+'.pdf',doc.output('blob'))}
+pdf(){const J=window.jspdf?.jsPDF;if(!J){toast('No se pudo cargar el generador de PDF. Recargá la página.');return}const porP=$('#asFmt')?.value==='persona';
+  const doc=new J({unit:'mm',format:'a4'});const D=this.detalle();const R=this.resumen(D);const L=12,W=186,BOT=286;let y=14;
+  const tx=(t,x,yy,o)=>doc.text(String(t??''),x,yy,o);const font=(st,sz)=>{doc.setFont('helvetica',st);doc.setFontSize(sz)};
+  const COLS=porP?[['Horario',31],['Orden',25],['Artículo · pieza',56],['Operación',26],['Cantidad',19,'r'],['Horas',13,'r'],['Hechas',16]]:[['Horario',24],['Orden',18],['Artículo · pieza',68],['Operación',28],['Cantidad',18,'r'],['Horas',14,'r'],['Hechas',16]];
+  const K=porP?1.25:1;
+  const alto=r=>{let h=10*K;if(r.T.length)h+=7*K+r.T.length*7.5*K;else if(r.ord)h+=6*K;if(r.obs)h+=doc.splitTextToSize('Obs.: '+r.obs,W-6).length*5*K+4;return h+4};
+  const titulo=()=>{font('bold',16);tx('Asignación de máquinas y tareas',L,y);font('normal',10.5);tx(this.dia(this.f)+(this.sucio?'  (borrador sin guardar)':''),L+W,y,{align:'right'});y+=7};
+  const bloque=r=>{const h=alto(r);if(!porP&&y+h>BOT){doc.addPage();y=14}
+    doc.setDrawColor(0);doc.setLineWidth(.4);doc.roundedRect(L,y,W,h-2,2,2);doc.setFillColor(238,238,238);doc.rect(L+.2,y+.2,W-.4,9*K,'F');
+    font('bold',12*K);tx(r.nombre,L+3,y+6.3*K);const nw=doc.getTextWidth(r.nombre);if(r.leg){font('normal',8.5*K);tx('leg. '+r.leg,L+5+nw,y+6.3*K)}
+    font('bold',13*K);tx(r.maq.join(' + ')||'sin máquina',L+W*.46,y+6.3*K);if(r.disp){font('normal',10*K);tx(durH(r.used)+' de '+durH(r.disp)+' h'+(r.hx?' (+'+r.hx+' h extra)':''),L+W-3,y+6.3*K,{align:'right'})}
+    let yy=y+9*K+5*K;
+    if(r.T.length){font('bold',8.5*K);doc.setTextColor(90);let x=L+3;for(const [n,w,al] of COLS){tx(n,al?x+w-2:x,yy,al?{align:'right'}:undefined);x+=w*(W-6)/186}doc.setTextColor(0);yy+=2*K;
+      for(const t of r.T){doc.setDrawColor(200);doc.line(L+3,yy,L+W-3,yy);yy+=5.4*K;let x=L+3;const cw=w=>w*(W-6)/186;
+        const vals=[[t.hor,'normal'],[t.op,'bold'],[t.art+' · '+t.pieza,'normal'],[t.oper,'normal'],[nf(t.qty),'bold','r'],[t.hs,'normal','r'],['','normal']];
+        vals.forEach(([v,st,al],i)=>{font(st,10*K);const w=cw(COLS[i][1]);let s=String(v);while(s.length>3&&doc.getTextWidth(s)>w-2)s=s.slice(0,-2);if(s!==String(v))s=s.slice(0,-1)+'…';tx(s,al?x+w-2:x,yy,al?{align:'right'}:undefined);x+=w});
+        if(porP){doc.setDrawColor(120);doc.rect(L+W-3-cw(16)+1,yy-4.4*K,cw(16)-3,5.6*K)}yy+=2.1*K}doc.setDrawColor(0)}
+    else if(r.ord){font('normal',10.5*K);tx('Orden: '+r.ord,L+3,yy);yy+=6*K}
+    if(r.obs){font('normal',10*K);const t=doc.splitTextToSize('Obs.: '+r.obs,W-6);tx(t,L+3,yy+(r.T.length?4.5:1)*K);}
+    y+=h};
+  if(porP){R.act.forEach((r,i)=>{if(i)doc.addPage();y=14;titulo();y+=4;bloque(r);y+=10;font('normal',11);tx('Observaciones del operario:',L,y);doc.setDrawColor(150);for(let k=1;k<=4;k++)doc.line(L,y+k*9,L+W,y+k*9)})}
+  else{titulo();font('normal',10);tx(`${R.act.length} personas${R.disp?` · ${durH(R.used)} de ${durH(R.disp)} h planificadas (${Math.round(R.used/R.disp*100)}%)`:''}`,L,y);y+=6;
+    for(const r of R.act)bloque(r);
+    const pie=[['No vienen',R.aus.map(r=>r.nombre).join(', ')],['Sin máquina',R.sinMaq.map(r=>r.nombre).join(', ')],['Máquinas sin asignar',R.libres.join(', ')||'ninguna']].filter(x=>x[1]);
+    for(const [k,v] of pie){font('normal',10);const t=doc.splitTextToSize(v,W-42);if(y+t.length*5+4>BOT){doc.addPage();y=14}font('bold',10);tx(k+':',L,y+4);font('normal',10);tx(t,L+42,y+4);y+=t.length*5+3}}
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);font('normal',8);doc.setTextColor(120);tx('Spotsline · Asignación '+fmtD(this.f)+' · hoja '+i+' de '+n,L+W,293,{align:'right'});doc.setTextColor(0)}
+  imprimirPDF((porP?'Asignacion por persona ':'Asignacion maquinas ')+this.f+'.pdf',doc)}
 };
 /* fotos que Claude leyó solo (tarea programada) y quedan para validar: colección fotopend */
 function pendBar(){const el=$('#tPend');if(!el)return;const L=(S.fotopend||[]).filter(x=>x.estado!=='cargada').sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')||(a.responsable||'').localeCompare(b.responsable||''));
