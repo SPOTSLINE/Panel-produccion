@@ -2216,7 +2216,11 @@ async function procesarRegistros(f){{
 function appURL(){return location.href.split('#')[0]}
 function otURL(o,li,seq){return appURL()+'#ot/'+encodeURIComponent(o.id)+'/'+li+'/'+seq}
 const ahora=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
-const CUR={get(){try{return JSON.parse(localStorage.getItem('spl.encurso')||'null')}catch(e){return null}},set(v){try{v?localStorage.setItem('spl.encurso',JSON.stringify(v)):localStorage.removeItem('spl.encurso')}catch(e){}try{v?setActiva(v):clearActiva()}catch(e){}}};
+/* hasta 2 tareas a la vez por celular (un operario con dos máquinas): slot 0 y slot 1 */
+const CUR={slot:0,k(s){return s?'spl.encurso2':'spl.encurso'},id(s){return uidShort()+(s?'b':'')},
+  get(s){s=s??this.slot;try{const c=JSON.parse(localStorage.getItem(this.k(s))||'null');if(c&&c.key&&!c.keys)c.keys=[c.key];return c}catch(e){return null}},
+  set(v,s){s=s??this.slot;try{v?localStorage.setItem(this.k(s),JSON.stringify(v)):localStorage.removeItem(this.k(s))}catch(e){}try{v?setActiva(v,this.id(s)):clearActiva(this.id(s))}catch(e){}},
+  all(){return [this.get(0),this.get(1)]}};
 const kStr=k=>k.map(x=>encodeURIComponent(String(x))).join('.');
 const kParse=s=>{const p=String(s).split('.');const seq=p.pop(),li=p.pop();return [decodeURIComponent(p.join('.')),li,seq]};
 function otGrupoURL(keys){return appURL()+'#ot/g/'+keys.map(kStr).join('~')}
@@ -2244,7 +2248,7 @@ function crearOrdenOperario(yo){const per=persObj(yo);if(!per?.creaOrd){toast('N
     const doc={numero:num,articulo:art,cantidad,fecha_req:today(),prioridad:'normal',notas:`Creada desde el celular por ${per.nombre}${obs?': '+obs:''}`,estado:'lanzada',creada:new Date().toISOString(),creada_por:S.uid||null,creada_por_op:yo,creada_por_nombre:per.nombre,origen:'operario',lineas,modelo_odoo:'mrp.production'};
     if(busy('#coGo'))return;try{await S.db.collection('ordenes').doc(id).set(doc);box.remove();toast('Orden '+num+' creada');location.hash='ot/p/'+encodeURIComponent(id)+'/0'}catch(e){E.textContent='No se pudo guardar. Revisá la conexión.'}finally{done('#coGo')}}}
 V.ot={keys:[],
-mount(sel,rest){document.body.classList.add('solo');this.pz=null;if(sel==='p'&&rest&&rest.length>=2){this.pz=[decodeURIComponent(rest[0]),rest[1]];this.keys=[];this.render();return}if(sel==='g'&&rest&&rest[0])this.keys=rest[0].split('~').map(kParse);else if(sel)this.keys=[[decodeURIComponent(sel),...(rest||[])]];else this.keys=[];this.render()},
+mount(sel,rest){document.body.classList.add('solo');this.pz=null;this.otra=null;if(sel==='p'&&rest&&rest.length>=2){this.pz=[decodeURIComponent(rest[0]),rest[1]];this.keys=[];this.render();return}if(sel==='g'&&rest&&rest[0])this.keys=rest[0].split('~').map(kParse);else if(sel)this.keys=[[decodeURIComponent(sel),...(rest||[])]];else this.keys=[];this.render()},
 unmount(){document.body.classList.remove('solo')},
 ctxs(keys){return (keys||this.keys).map(k=>({k,c:ctxKey(k)}))},
 yo(){const id=lsGet('yo');const p=(S.M.personal?.items||[]).find(p=>p.id===id&&p.activo!==false);if(!p)return '';if(cfgOp().pedirClave&&(!p.pinq||lsGet('yoh')!==p.pinq))return '';return id},
@@ -2255,19 +2259,29 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
   if(!S.M.productos){M.innerHTML='<div class="op1"><p class="note">Cargando…</p></div>';return}
   if(!yo){M.innerHTML=`<div class="op1">${this.volver()}<h1>¿Quién sos?</h1><p class="lead">Elegilo una vez: este celular lo recuerda.</p><input id="oBus" class="opin" placeholder="Buscá por nombre o legajo" style="margin-bottom:10px" inputmode="search">${(()=>{const bt=p=>`<button class="opbig sec" data-yo="${esc(p.id)}" data-q="${esc(nrm(p.nombre+' '+(p.legajo||'')))}">${esc(p.nombre)}${p.legajo?`<br><small class="note">Legajo ${esc(p.legajo)}</small>`:''}</button>`;const srt=(a,b)=>a.nombre.localeCompare(b.nombre,'es');const T=P.filter(p=>areaDe(p.id)==='taller').sort(srt);const O=P.filter(p=>areaDe(p.id)!=='taller').sort((a,b)=>String(AREAS_PL[areaDe(a.id)]||'').localeCompare(String(AREAS_PL[areaDe(b.id)]||''),'es')||srt(a,b));const g=[...new Set(O.map(p=>areaDe(p.id)))];return `<div class="opgrid" id="oGr">${T.map(bt).join('')}</div>${g.map(a=>`<h3 class="oGh" style="margin:16px 0 6px">${esc(AREAS_PL[a]||a)}</h3><div class="opgrid oGr2">${O.filter(p=>areaDe(p.id)===a).map(bt).join('')}</div>`).join('')}`})()}</div>`;
     M.querySelectorAll('[data-yo]').forEach(b=>b.onclick=async()=>{const p=persObj(b.dataset.yo);if(cfgOp().pedirClave){if(!p?.pinq){alert('Todavía no tenés clave de operario. Pedile al supervisor que te la asigne.');return}const k=prompt(p.nombre+': ingresá tu clave de operario');if(k===null)return;const h=await hashPin(k);if(h!==p.pinq){alert('Clave incorrecta.');return}lsSet('yoh',h)}lsSet('yo',b.dataset.yo);this.render()});$('#oBus').oninput=()=>{const q=nrm($('#oBus').value);M.querySelectorAll('[data-yo]').forEach(b=>b.classList.toggle('hide',!!q&&!b.dataset.q.includes(q)));M.querySelectorAll('.oGr2').forEach(d=>{const vis=[...d.children].some(b=>!b.classList.contains('hide'));d.classList.toggle('hide',!vis);d.previousElementSibling?.classList.toggle('hide',!vis)})};return}
-  let cur=CUR.get();if(cur&&cur.key&&!cur.keys)cur.keys=[cur.key];
-  {const ad=(S.activas||[]).find(x=>x.id===uidShort());if(cur&&ad&&ad.cerradaSup&&ad.activo===false&&ad.ini===cur.ini&&ad.fecha===cur.fecha){try{localStorage.removeItem('spl.encurso')}catch(e){}cur=null;toast('El supervisor cerró tu tarea anterior')}
-   if(cur&&ad&&ad.activo&&ad.corrSup&&ad.yo===cur.yo&&ad.fecha===cur.fecha&&cur.corrTs!==ad.corrSup.ts&&(ad.corrSup.ini1===cur.ini||ad.corrSup.ini0===cur.ini||ad.ini===cur.ini)){
+  const A=CUR.all();
+  for(let s=0;s<2;s++){const cur=A[s];const ad=(S.activas||[]).find(x=>x.id===CUR.id(s));if(!cur||!ad)continue;
+   if(ad.cerradaSup&&ad.activo===false&&ad.ini===cur.ini&&ad.fecha===cur.fecha){try{localStorage.removeItem(CUR.k(s))}catch(e){}A[s]=null;toast('El supervisor cerró tu tarea anterior');continue}
+   if(ad.activo&&ad.corrSup&&ad.yo===cur.yo&&ad.fecha===cur.fecha&&cur.corrTs!==ad.corrSup.ts&&(ad.corrSup.ini1===cur.ini||ad.corrSup.ini0===cur.ini||ad.ini===cur.ini)){
      const k1=ad.key?ad.key.map(String).join('|'):'';const kc=cur.keys&&cur.keys[0]?cur.keys[0].map(String).join('|'):'';
      if(ad.key&&k1!==kc){cur.keys=[ad.key];cur.key=ad.key;const cx=ctxKey(ad.key);if(cx)cur.titulo=`OP ${cx.o.numero} ${cx.l.pieza} ${cx.w.op}`;delete cur.parcial}
-     cur.maq=ad.maq;cur.ini=ad.ini;cur.corrTs=ad.corrSup.ts;try{localStorage.setItem('spl.encurso',JSON.stringify(cur))}catch(e){}
-     toast('El supervisor corrigió tu tarea: '+(ad.maq||'sin máquina'));if(cur.keys&&cur.keys.length&&this.keys.length&&!this.mismo(cur)){this.goKeys(cur.keys);return}}}
+     cur.maq=ad.maq;cur.ini=ad.ini;cur.corrTs=ad.corrSup.ts;try{localStorage.setItem(CUR.k(s),JSON.stringify(cur))}catch(e){}
+     toast('El supervisor corrigió tu tarea: '+(ad.maq||'sin máquina'));if(cur.keys&&cur.keys.length&&this.keys.length&&!A.some(c=>c&&this.mismo(c))){this.goKeys(cur.keys);return}}}
   const leg=(S.M.personal?.items||[]).find(p=>p.id===yo)?.legajo;
   const head=`${this.volver()}<div class="ophead"><span><b>${esc(persona(yo))}</b>${leg?` <span class="note">legajo ${esc(leg)}</span>`:''}</span><span class="row" style="gap:4px"><button class="btn link" id="oHoy">Mis registros de hoy</button><a class="btn link" href="https://spotsline.github.io/Panel-de-Ausentismo/portal_empleado.html${leg?'?leg='+encodeURIComponent(leg):''}" target="_blank" rel="noopener" title="Vacaciones, recibos, préstamos y pedidos a RRHH" style="text-decoration:none">Mis trámites RRHH</a><button class="btn link" id="oNo">No soy yo</button></span></div>`;
-  const mio=cur&&cur.yo===yo?cur:null;
-  if(mio&&!(mio.keys||[]).length){M.innerHTML=`<div class="op1">${head}<div class="opcard warn"><h2>${esc(motivo(mio.motivo)?.nombre||'Tarea')} desde las ${esc(mio.ini)}</h2><p class="note">${mio.maq?esc(mio.maq):'Sin máquina'}</p><button class="opbig" id="oFinPar">Terminé</button><button class="btn link" id="oCancel" style="margin-top:8px">Cancelar</button></div></div>`;this.bindHead();this.bindParadaFin(mio,yo);return}
-  if(mio&&!this.mismo(mio)){M.innerHTML=`<div class="op1">${head}<div class="opcard warn"><h2>Tenés una tarea sin terminar</h2><p>${esc(mio.titulo)}, desde las <b>${esc(mio.ini)}</b>.</p><button class="opbig" id="oVolver">Ir a terminarla</button><button class="opbig sec" id="oDescartar" style="margin-top:8px">Descartarla</button></div></div>`;this.bindHead();
-    $('#oVolver').onclick=()=>this.goKeys(mio.keys);$('#oDescartar').onclick=()=>{if(confirm('¿Descartar la tarea sin guardar?')){CUR.set(null);this.render()}};return}
+  const MM=A.map(c=>c&&c.yo===yo?c:null);const abiertas=[0,1].filter(i=>MM[i]);
+  let sl=this.keys.length?MM.findIndex(c=>c&&this.mismo(c)):MM.findIndex(c=>c&&!(c.keys||[]).length);
+  if(sl<0&&this.otra!=null&&!MM[this.otra])sl=this.otra;
+  if(sl<0&&abiertas.length){const tt=c=>esc(c.titulo||motivo(c.motivo)?.nombre||'Tarea');const puede=this.keys.length&&abiertas.length===1&&!this.pz;
+    M.innerHTML=`<div class="op1">${head}<div class="opcard warn"><h2>${abiertas.length>1?'Tenés dos tareas sin terminar':'Tenés una tarea sin terminar'}</h2>${abiertas.map(i=>{const c=MM[i];return `<div style="margin:10px 0 4px"><p style="margin:0 0 6px">${tt(c)}${c.maq?` en <b>${esc(c.maq)}</b>`:''}, desde las <b>${esc(c.ini)}</b>.</p><button class="opbig" data-ir="${i}">Ir a terminarla</button><button class="btn link" data-desc="${i}" style="margin-top:4px">Descartarla</button></div>`}).join('')}
+     ${puede?`<button class="opbig sec" id="oOtra" style="margin-top:10px">Empezar esta también (otra máquina a la vez)</button><p class="note" style="margin:6px 0 0">Para cuando manejás dos máquinas al mismo tiempo. El tiempo se reparte entre las dos tareas.</p>`:''}</div></div>`;this.bindHead();
+    M.querySelectorAll('[data-ir]').forEach(b=>b.onclick=()=>this.goKeys(MM[+b.dataset.ir].keys||[]));
+    M.querySelectorAll('[data-desc]').forEach(b=>b.onclick=()=>{if(confirm('¿Descartar la tarea sin guardar?')){CUR.set(null,+b.dataset.desc);this.render()}});
+    const bo=$('#oOtra');if(bo)bo.onclick=()=>{this.otra=abiertas[0]?0:1;this.render()};return}
+  if(sl<0)sl=MM[0]&&!MM[1]?1:0;CUR.slot=sl;const mio=MM[sl];const otraT=MM[1-sl];
+  const otraTxt=otraT?`<div class="opcard" style="padding:10px 14px"><span class="note">Otra tarea en curso: <b>${esc(otraT.titulo||motivo(otraT.motivo)?.nombre||'Tarea')}</b>${otraT.maq?' en <b>'+esc(otraT.maq)+'</b>':''}, desde las ${esc(otraT.ini)}.</span> <button class="btn link" id="oOtraIr">Ir a esa</button></div>`:'';
+  const bindOtra=()=>{const b=$('#oOtraIr');if(b)b.onclick=()=>{if((otraT.keys||[]).length)this.goKeys(otraT.keys);else{this.otra=null;this.goKeys([]);this.keys=[];this.render()}}};
+  if(mio&&!(mio.keys||[]).length){M.innerHTML=`<div class="op1">${head}${otraTxt}<div class="opcard warn"><h2>${esc(motivo(mio.motivo)?.nombre||'Tarea')} desde las ${esc(mio.ini)}</h2><p class="note">${mio.maq?esc(mio.maq):'Sin máquina'}</p><button class="opbig" id="oFinPar">Terminé</button><button class="btn link" id="oCancel" style="margin-top:8px">Cancelar</button></div></div>`;this.bindHead();bindOtra();this.bindParadaFin(mio,yo);return}
   if(this.pz&&!this.keys.length){const [oid,li]=this.pz;const o=S.ordenes.find(x=>x.id===oid);const l=o?.lineas?.[+li];
     if(!l){M.innerHTML=`<div class="op1">${head}<div class="opcard"><h2>No encuentro esta pieza</h2><p class="note">Puede que la orden esté cerrada o se haya lanzado en otra versión de la página.</p><button class="opbig sec" id="oLista">Elegir otra orden</button></div></div>`;this.bindHead();$('#oLista').onclick=()=>{location.hash='ot'};return}
     const st=l.ops.map(w=>{const h=S.prog.get(woKey(o.id,l.pieza,w.seq))?.qty||0;return {w,h,falta:Math.max(0,l.cant-h)}});const sig=st.find(x=>x.falta>0);const A=activasVivas();
@@ -2276,7 +2290,7 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
     this.bindHead();M.querySelectorAll('[data-pzseq]').forEach(b=>b.onclick=()=>{const x=st.find(z=>z.w.seq==b.dataset.pzseq);if(x&&!x.falta&&!confirm('Esa operación ya está completa. ¿Abrirla igual?'))return;this.goKeys([[oid,li,b.dataset.pzseq]])});return}
   if(!this.keys.length){M.innerHTML=`<div class="op1">${head}${this.inicio()}</div>`;this.bindHead();this.bindInicio(yo);return}
   const C=this.ctxs();if(C.some(x=>!x.c)){M.innerHTML=`<div class="op1">${head}<div class="opcard"><h2>No encuentro ${C.length>1?'alguna de estas órdenes':'esta orden de trabajo'}</h2><p class="note">Puede estar cerrada o cancelada, o haberse lanzado en otra versión de la página. Hay ${S.ordenes.length} órdenes en la base.</p><button class="opbig sec" id="oLista">Elegir otra orden</button></div></div>`;this.bindHead();$('#oLista').onclick=()=>{location.hash='ot'};return}
-  const tipo=C[0].c.w.tipo;const maqs=(S.M.centros?.items||[]).filter(x=>x.tipo===tipo);const mq=lsGet('maq.'+tipo);const maq=maqs.some(x=>x.codigo===mq)?mq:(maqs.length===1?maqs[0].codigo:'');
+  const tipo=C[0].c.w.tipo;const maqs=(S.M.centros?.items||[]).filter(x=>x.tipo===tipo);const mq=lsGet('maq.'+tipo);let maq=maqs.some(x=>x.codigo===mq)?mq:(maqs.length===1?maqs[0].codigo:'');const maqOtra=otraT&&otraT.maq;if(maqOtra&&maq===maqOtra)maq=(maqs.find(x=>x.codigo!==maqOtra)||{}).codigo||'';
   const enc=this.mismo(mio)?mio:null;const multi=C.length>1;
   const infoUna=({c})=>{const {o,l,w}=c;const p=S.prog.get(woKey(o.id,l.pieza,w.seq));const h=p?p.qty:0;const falta=Math.max(0,l.cant-h);const i=l.ops.indexOf(w);
     return multi?`<div class="opline"><div><b>OP ${esc(o.numero)}</b> ${esc(o.articulo)}<br><span>${esc(l.pieza)}, ${esc(w.op)}</span></div><div style="text-align:right"><b>${nf(falta)}</b><br><span>faltan de ${nf(l.cant)}</span></div></div>`
@@ -2293,10 +2307,10 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
      <button class="opbig" id="oFin">Terminé</button><div class="row" style="gap:6px;margin-top:8px">${multi?'':`<button class="btn sec" id="oParc">Informar cuántas llevo${enc.parcial?` (${nf(enc.parcial.qty)})`:''}</button>`}<button class="btn sec" id="oPar">Parada o cambio de matriz</button><button class="btn link" id="oCancel">Cancelar tarea</button></div></div>`}
   else{act=`<div class="opcard"><label class="f">Máquina<select id="oMaq" class="opin"><option value="">Elegí la máquina</option>${maqs.map(x=>`<option ${x.codigo===maq?'selected':''}>${esc(x.codigo)}</option>`).join('')}</select></label><div class="err" id="oErr"></div>
      <button class="opbig" id="oIni">Empecé</button><div class="row" style="gap:6px;margin-top:8px"><button class="btn sec" id="oPar">Parada o cambio de matriz</button>${multi||!cfgOp().cargaManual?'':'<button class="btn sec" id="oMano">Cargar a mano</button>'}</div><div id="oManoF"></div></div>`}
-  M.innerHTML=`<div class="op1">${head}${info}${act}</div>`;this.bindHead();
+  M.innerHTML=`<div class="op1">${head}${otraTxt}${info}${act}</div>`;this.bindHead();bindOtra();
   const titulo=C.map(({c})=>`OP ${c.o.numero} ${c.l.pieza} ${c.w.op}`).join(' + ');
   const bA=$('#oAdd');if(bA)bA.onclick=()=>this.agregar(tipo);const bQ=$('#oQuitar');if(bQ)bQ.onclick=()=>this.goKeys(this.keys.slice(0,-1));
-  const bI=$('#oIni');if(bI)bI.onclick=()=>{const m=$('#oMaq').value;if(!m){$('#oErr').textContent='Elegí la máquina.';return}lsSet('maq.'+tipo,m);CUR.set({yo,keys:this.keys,key:this.keys[0],titulo,maq:m,ini:ahora(),fecha:today(),tipo:'prod',pausa:0});toast('Empezaste a las '+ahora());this.render()};
+  const bI=$('#oIni');if(bI)bI.onclick=()=>{const m=$('#oMaq').value;if(!m){$('#oErr').textContent='Elegí la máquina.';return}if(maqOtra&&m===maqOtra&&!confirm('Tu otra tarea ya está en '+m+'. ¿Empezar esta también en '+m+'?'))return;lsSet('maq.'+tipo,m);CUR.set({yo,keys:this.keys,key:this.keys[0],titulo,maq:m,ini:ahora(),fecha:today(),tipo:'prod',pausa:0});toast('Empezaste a las '+ahora());this.render()};
   const bF=$('#oFin');if(bF)bF.onclick=()=>this.terminar(enc,C,yo);
   const bPc=$('#oParc');if(bPc)bPc.onclick=()=>{const r=prompt('¿Cuántas piezas buenas llevás hasta ahora en esta tarea?',enc.parcial?enc.parcial.qty:'');if(r===null)return;const q=parseInt(r,10);if(!(q>=0)){toast('Poné un número');return}
     const cur=CUR.get();cur.parcial={qty:q,hora:ahora(),pausa:cur.pausa||0};CUR.set(cur);const qi=document.querySelector('[data-q="0"]');toast('Informado: '+nf(q)+' piezas');this.render();const q2=document.querySelector('[data-q="0"]');if(q2&&!q2.value)q2.placeholder=nf(q)+' hasta ahora'};
@@ -2304,7 +2318,7 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
   const bP=$('#oPar');if(bP)bP.onclick=()=>this.parada(yo,titulo,enc||{maq:$('#oMaq')?.value||''});
   if(enc&&enc.tipo==='parada')this.bindParadaFin(enc,yo);
   const bM=$('#oMano');if(bM)bM.onclick=()=>this.mano(C[0].c,yo)},
-async terminar(enc,C,yo){const Q=C.map((x,i)=>parseInt(document.querySelector(`[data-q="${i}"]`).value,10));const Sc=C.map((x,i)=>parseInt(document.querySelector(`[data-s="${i}"]`).value,10)||0);
+async terminar(enc,C,yo){const sl=CUR.slot;const Q=C.map((x,i)=>parseInt(document.querySelector(`[data-q="${i}"]`).value,10));const Sc=C.map((x,i)=>parseInt(document.querySelector(`[data-s="${i}"]`).value,10)||0);
   if(Q.some(q=>!(q>=0))){$('#oErr').textContent=C.length>1?'Poné la cantidad buena de cada orden (0 si no hiciste).':'Poné la cantidad buena que hiciste.';return}
   const fin=ahora();const tot=Math.max(1,(diffMin(enc.ini,fin)||1)-(enc.pausa||0));const W=C.map(({c},i)=>(Q[i]+Sc[i])*(c.w.seg||1));const sw=W.reduce((a,b)=>a+b,0);
   let resto=tot;const mins=C.map((x,i)=>{if(i===C.length-1)return Math.max(0,resto);const m=Math.round(tot*(sw?W[i]/sw:1/C.length));resto-=m;return m});
@@ -2312,15 +2326,15 @@ async terminar(enc,C,yo){const Q=C.map((x,i)=>parseInt(document.querySelector(`[
   const grupo=C.length>1?'cama-'+newId():null;const obs=$('#oObs').value.trim();if(busy('#oFin'))return;
   try{await writeParte(enc.fecha,a=>C.forEach(({c},i)=>{const {o,l,w}=c;a.push({id:newId(),tipo:'prod',operario:yo,centro:enc.maq,centro_tipo:centroTipo(enc.maq),op_id:o.id,op_numero:o.numero,articulo:o.articulo,pieza:l.pieza,seq:w.seq,paso:w.op,ini:enc.ini,fin,min:mins[i],qty:Q[i],scrap:Sc[i],seg_std:w.seg||null,std_min:w.seg?Q[i]*w.seg/60:null,fuera_plan:false,
       obs:[obs,grupo?'Cama compartida: '+C.map(x=>'OP '+x.c.o.numero).join(', '):''].filter(Boolean).join('. '),grupo,origen:'qr',ts:new Date().toISOString()})}));
-    CUR.set(null);toast('Guardado');this.render()}catch(e){$('#oErr').textContent='No se pudo guardar. Revisá la conexión y tocá de nuevo.'}finally{done('#oFin')}},
-parada(yo,titulo,enc){const M=S.M.motivos?.items||[];const box=document.createElement('div');box.className='modal';
+    CUR.set(null,sl);toast('Guardado');this.render()}catch(e){$('#oErr').textContent='No se pudo guardar. Revisá la conexión y tocá de nuevo.'}finally{done('#oFin')}},
+parada(yo,titulo,enc){const sl=CUR.slot;const M=S.M.motivos?.items||[];const box=document.createElement('div');box.className='modal';
   box.innerHTML=`<div class="dlg"><div class="pzh" style="align-items:center"><h2 style="margin:0">¿Qué pasó?</h2><button class="btn link" data-x>Cerrar</button></div><div class="dlgb" style="border:0;padding:0;margin-top:10px"><div class="opgrid">${M.map(m=>`<button class="opbig sec" data-m="${esc(m.id)}">${esc(m.nombre)}</button>`).join('')}</div></div></div>`;
   document.body.appendChild(box);box.onclick=e=>{if(e.target===box||e.target.hasAttribute('data-x'))box.remove()};
-  box.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const cur=CUR.get();const vol=cur&&cur.tipo==='prod'&&cur.yo===yo?cur:null;const t0=ahora();
-    CUR.set({yo,keys:this.keys,key:this.keys[0],titulo,maq:(vol&&vol.maq)||enc.maq||'',ini:t0,fecha:today(),tipo:'parada',motivo:b.dataset.m,volver:vol});box.remove();toast('Parada desde las '+t0);this.render()})},
-bindParadaFin(enc,yo){const b=$('#oFinPar');if(b)b.onclick=async()=>{const fin=ahora();const m=diffMin(enc.ini,fin)||1;if(busy('#oFinPar'))return;
+  box.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{const cur=CUR.get(sl);const vol=cur&&cur.tipo==='prod'&&cur.yo===yo?cur:null;const t0=ahora();
+    CUR.set({yo,keys:this.keys,key:this.keys[0],titulo,maq:(vol&&vol.maq)||enc.maq||'',ini:t0,fecha:today(),tipo:'parada',motivo:b.dataset.m,volver:vol},sl);box.remove();toast('Parada desde las '+t0);this.render()})},
+bindParadaFin(enc,yo){const sl=CUR.slot;const b=$('#oFinPar');if(b)b.onclick=async()=>{const fin=ahora();const m=diffMin(enc.ini,fin)||1;if(busy('#oFinPar'))return;
     try{await writeParte(enc.fecha,a=>a.push({id:newId(),tipo:'parada',operario:yo,centro:enc.maq||null,centro_tipo:enc.maq?centroTipo(enc.maq):null,motivo:enc.motivo,ini:enc.ini,fin,min:m,obs:enc.titulo||'',origen:'qr',ts:new Date().toISOString()}));
-      if(enc.volver){CUR.set({...enc.volver,pausa:(enc.volver.pausa||0)+m});toast('Parada guardada. Seguís con la tarea')}else{CUR.set(null);toast('Guardado')}this.render()}catch(e){toast('No se pudo guardar. Tocá de nuevo.')}finally{done('#oFinPar')}};
+      if(enc.volver){CUR.set({...enc.volver,pausa:(enc.volver.pausa||0)+m},sl);toast('Parada guardada. Seguís con la tarea')}else{CUR.set(null,sl);toast('Guardado')}this.render()}catch(e){toast('No se pudo guardar. Tocá de nuevo.')}finally{done('#oFinPar')}};
   const c=$('#oCancel');if(c&&!(enc.keys||[]).length)c.onclick=()=>{if(confirm('¿Cancelar sin guardar?')){CUR.set(null);this.render()}}},
 agregar(tipo){const ya=new Set(this.keys.map(k=>k.map(String).join('|')));const ws=workordersFor(tipo).filter(x=>!ya.has([x.o.id,x.o.lineas.indexOf(x.l),x.w.seq].map(String).join('|')));const box=document.createElement('div');box.className='modal';
   box.innerHTML=`<div class="dlg"><div class="pzh" style="align-items:center"><h2 style="margin:0">Agregar a la misma cama</h2><button class="btn link" data-x>Cerrar</button></div><p class="note">Órdenes pendientes de ${esc(tipoNombre(tipo))}.</p><input id="agQ" class="opin" placeholder="Buscar OP, artículo o pieza" style="margin-bottom:8px">
@@ -2384,8 +2398,8 @@ new MutationObserver(()=>{document.querySelectorAll('table').forEach(t=>{if(t.da
 
 /* ---------- trabajando ahora (tareas iniciadas desde el celular) ---------- */
 function ctxKey(key){if(!key)return null;const [oid,li,seq]=key;const o=S.ordenes.find(x=>x.id===oid);const l=o?.lineas[+li];const w=l?.ops.find(x=>x.seq==seq);return w?{o,l,w}:null}
-function setActiva(cur){if(!S.db)return;const c=ctxKey((cur.keys&&cur.keys[0])||cur.key);const d={activo:true,yo:cur.yo,maq:cur.maq||'',ini:cur.ini,fecha:cur.fecha,tipo:cur.tipo,motivo:cur.motivo||null,key:(cur.keys&&cur.keys[0])||cur.key||null,pausa:cur.pausa||0,parcial:cur.parcial||null,ts:new Date().toISOString()};
-  if(c)Object.assign(d,{op_id:c.o.id,op_numero:c.o.numero,articulo:c.o.articulo,pieza:c.l.pieza,seq:c.w.seq,paso:c.w.op});if(cur.keys&&cur.keys.length>1){d.extra=cur.keys.slice(1).map(k=>{const x=ctxKey(k);return x?{op_id:x.o.id,op_numero:x.o.numero,pieza:x.l.pieza,seq:x.w.seq}:null}).filter(Boolean)}S.db.collection('activas').doc(uidShort()).set(d).catch(()=>{})}
+function setActiva(cur,id){if(!S.db)return;const c=ctxKey((cur.keys&&cur.keys[0])||cur.key);const d={activo:true,yo:cur.yo,maq:cur.maq||'',ini:cur.ini,fecha:cur.fecha,tipo:cur.tipo,motivo:cur.motivo||null,key:(cur.keys&&cur.keys[0])||cur.key||null,pausa:cur.pausa||0,parcial:cur.parcial||null,ts:new Date().toISOString()};
+  if(c)Object.assign(d,{op_id:c.o.id,op_numero:c.o.numero,articulo:c.o.articulo,pieza:c.l.pieza,seq:c.w.seq,paso:c.w.op});if(cur.keys&&cur.keys.length>1){d.extra=cur.keys.slice(1).map(k=>{const x=ctxKey(k);return x?{op_id:x.o.id,op_numero:x.o.numero,pieza:x.l.pieza,seq:x.w.seq}:null}).filter(Boolean)}S.db.collection('activas').doc(id||uidShort()).set(d).catch(()=>{})}
 function clearActiva(id){if(!S.db)return;S.db.collection('activas').doc(id||uidShort()).set({activo:false,ts:new Date().toISOString()}).catch(()=>{})}
 function activasVivas(){return (S.activas||[]).filter(a=>a.activo&&a.fecha&&a.fecha>=addDays(today(),-1))}
 function transcurrido(a){const now=new Date();const [h,m]=String(a.ini||'0:0').split(':').map(Number);const st=new Date(a.fecha+'T00:00:00');st.setHours(h,m,0,0);const min=Math.max(0,Math.round((now-st)/60000));return min}
