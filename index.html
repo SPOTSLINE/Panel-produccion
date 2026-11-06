@@ -285,6 +285,7 @@ body.tvon .app{display:none}
 @keyframes tvtk{from{transform:translateX(0)}to{transform:translateX(-100%)}}
 #tvK .tvx{position:fixed;right:1vw;bottom:7vh;opacity:.15;background:#2C2C2A;color:#F2F2EE;border:0;border-radius:.8vh;padding:.8vh 1.2vw;font-size:1.6vh;cursor:pointer}#tvK .tvx:hover{opacity:1}
 @media (max-aspect-ratio:1/1){#tvK .tvres,#tvK .tvarea{grid-template-columns:1fr}#tvK .tvk{grid-template-columns:repeat(2,1fr)}}
+#sugBtn .sugn{background:var(--bad);color:#fff;border-radius:99px;font-size:11px;font-weight:700;padding:1px 7px;margin-left:6px}.sugc{border:1px solid var(--line2);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;background:var(--panel)}.sugc:hover{border-color:var(--lamp)}.sugc.nueva{border-left:4px solid var(--lamp);background:var(--lampbg)}.sugc .sugt{margin:5px 0;font-size:14px;line-height:1.4}.sugbox{background:var(--panel2);border-radius:8px;padding:10px 12px}.sugbox p{margin:2px 0 10px;line-height:1.45;white-space:pre-wrap}.sugimg{max-width:100%;max-height:340px;border-radius:8px;display:block;margin-top:6px}.sugav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--lampbg);color:var(--lampink);border-left:4px solid var(--lamp);border-radius:8px;padding:10px 14px;margin:0 0 16px}.sugav.bad{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
 </style>
 </head>
 <body>
@@ -306,6 +307,7 @@ body.tvon .app{display:none}
     <a href="#maestro" data-v="maestro">Maestro</a>
     <a href="#instructivo" data-v="instructivo">Instructivo</a>
     <a href="#auditoria" data-v="auditoria">Registro de cambios</a>
+    <a href="#sugerencias" id="sugBtn" class="hide">Buzón de sugerencias</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
     <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-10-29 i</div>
@@ -447,7 +449,7 @@ const AYSEC={general:'indicadores',plan:'importar',taller:'taller',indicadores:'
 function header(t,lead){return `<h1>${t}</h1><p class="lead">${lead} <a class="help" href="#instructivo/${AYSEC[S.view]||''}">Ver instructivo</a>${['planta','armado','pintura','taller','pantalla'].includes(S.view)?VIS.boton():''}</p>`+(S.supaErr?`<div class="banner" style="border-color:var(--bad);background:var(--badbg)"><b>No se pudo conectar con la base compartida de Supabase</b> ${S.supaErr==='tabla'?'porque la tabla <b>'+SUPA.tabla+'</b> todavía no existe. Hay que crearla una vez en Supabase (SQL Editor) con el script que acompaña este archivo.':S.supaErr==='columna'?'porque la tabla <b>'+SUPA.tabla+'</b> existe pero le falta la columna <b>updated_at</b>. Volvé a correr el script SQL completo.':'. Revisá la conexión a internet y recargá.'}<br><span class="note">Detalle de Supabase: ${esc(S.supaDet||'')}</span> Mientras tanto estás en modo local: lo que cargues queda solo en esta computadora.</div>`:'')+(S.local?`<div class="banner"><b>Modo local.</b> Estás usando una copia fuera de claude.ai: los maestros vienen incluidos en el archivo y lo que cargues se guarda solo en esta computadora y navegador, sin compartirse. <span class="row" style="display:inline-flex;gap:6px;margin-left:6px"><button class="btn sm" onclick="respaldo()">Descargar respaldo</button><button class="btn sec sm" onclick="restaurar()">Restaurar respaldo</button></span></div>`:S.live?'':`<div class="banner">Conectando con los datos…</div>`)+(S.live&&!S.M.productos&&S.loaded.productos?`<div class="banner">El maestro de productos todavía no está cargado.</div>`:'')}
 
 /* GENERAL */
-V.general={mount(){$('#main').innerHTML=header('General','Resumen del día de toda la planta: fábrica, pintura, armado, órdenes, stock entre áreas y personal. Tocá un recuadro para ir al detalle.')+`<div id="g"></div>`;this.update()},
+V.general={mount(){setTimeout(sugAvisoGeneral,0);$('#main').innerHTML=header('General','Resumen del día de toda la planta: fábrica, pintura, armado, órdenes, stock entre áreas y personal. Tocá un recuadro para ir al detalle.')+`<div id="g"></div>`;this.update()},
 update(){
   const g=$('#g');if(!g)return;
   const abiertas=S.ordenes.filter(abierta);
@@ -3128,7 +3130,7 @@ function perfilOperario(s){const per=(S.M.personal?.items||[]).find(x=>x.id===s.
   const a=AREAS_OP_PANEL.includes(s.area)?s.area:null;if(!a)return null;const base=perfiles().find(x=>x.id===a);
   return {id:'op:'+per.id,op:per.id,nombre:per.nombre,area:a,vistas:[a,'planta','instructivo'],permisos:{cargar:true},pin:per.pinq,operario:true,base:base?.nombre||null}}
 function operariosPanel(a){const L=a?[a]:AREAS_OP_PANEL;return L.flatMap(x=>personalDeArea(x).filter(p=>p.pinq).map(p=>({p,a:x}))).sort((u,v)=>u.p.nombre.localeCompare(v.p.nombre,'es'))}
-function vistaPermitida(v,p){p=p||perfilActual();if(v==='ot')return true;if(!p)return false;return p.vistas==='*'||(p.vistas||[]).includes(v)}
+function vistaPermitida(v,p){p=p||perfilActual();if(v==='ot'||v==='sugerencias')return true;if(!p)return false;return p.vistas==='*'||(p.vistas||[]).includes(v)}
 function aplicarPerfil(){const p=perfilActual();S.perfil=p;const pm=permisosDe(p);S.canPlan=!!pm.plan;S.puedeMaestro=!!pm.maestro;S.puedeUsuarios=!!pm.usuarios;S.puedeEditar=!!pm.editar;S.puedeCargar=!!pm.cargar;S.puedeDerivar=!!pm.derivar;S.canWrite=!!(pm.cargar||pm.editar);
   S.areaFija=p&&p.area&&p.vistas!=='*'?p.area:null;
   document.querySelectorAll('.rail a[data-v]').forEach(a=>a.classList.toggle('hide',a.dataset.v==='ot'?!(p&&(p.vistas==='*'||(p.vistas||[]).includes('taller'))):!vistaPermitida(a.dataset.v,p)));
@@ -4625,6 +4627,108 @@ async function publicarResumenGeneral(){
   }catch(e){console.error('No se pudo publicar el resumen para el Panel General',e)}
 }
 
+/* ---------- BUZÓN DE SUGERENCIAS de los empleados (Mi Spotsline) ----------
+   Las manda el empleado desde Mi Spotsline y las gestiona el jefe de producción acá.
+   Datos: filas rrhh_sug_* de panel_horas, solo por las funciones rrhh_sug_* (buzon_sugerencias.sql).
+   Ven la sección el jefe de producción (Marchionno, organigrama SPT-145) y los administradores. */
+const SUG={nodo:'SPT-145',nombreJefe:'MARCHIONNO MAXIMILIANO LIONEL',cadaMin:2,L:null,err:null,puede:false,yo:'',filtro:'pend',cat:'',area:'',q:'',fotos:{}};
+const SUG_CATS={tiempos:['⏱️','Tiempos y productividad'],calidad:['✅','Calidad'],ahorro:['♻️','Ahorro de materiales'],maquinas:['🔧','Máquinas y herramientas'],orden:['🗂️','Orden y puesto de trabajo'],logistica:['🚚','Logística interna y expedición'],seguridad:['🦺','Seguridad'],coordinacion:['🔄','Coordinación y planificación'],otros:['💬','Otros']};
+const SUG_GANA={tiempo:'Ahorra tiempo',costo:'Ahorra material o plata',calidad:'Mejora la calidad',seguridad:'Más seguro',orden:'Más cómodo u ordenado'};
+const SUG_EST={recibida:['Nueva','lamp'],analisis:['En análisis',''],aprobada:['Aprobada',''],implementada:['Implementada','ok'],descartada:['Descartada','bad']};
+const SUG_PRIO={alta:['Alta','bad'],media:['Media','lamp'],baja:['Baja','']};
+const SUG_RESP={analisis:'Gracias por la sugerencia. La estamos analizando y te contamos.',aprobada:'¡Buena idea! La vamos a hacer. Te avisamos cuando esté lista.',implementada:'Ya está implementada. ¡Gracias por el aporte!',descartada:'Gracias por la idea. Por ahora no la vamos a hacer porque '};
+const sugNom=s=>String(s||'').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
+const sugFH=iso=>{try{const d=new Date(iso);return d.toLocaleDateString('es-AR')+' '+d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}catch(e){return ''}};
+async function sugRpc(fn,args){const r=await fetch(`${SUPA.url}/rest/v1/rpc/${fn}`,{method:'POST',headers:{apikey:SUPA.key,Authorization:'Bearer '+SUPA.key,'Content-Type':'application/json'},body:JSON.stringify(args||{})});
+  let j=null;try{j=await r.json()}catch(e){}if(!r.ok){const e=new Error((j&&(j.message||j.hint))||('HTTP '+r.status));e.status=r.status;throw e}return j}
+async function sugCargar(){if(!SUG.puede)return;try{const L=await sugRpc('rrhh_sug_listar');SUG.L=Array.isArray(L)?L:[];SUG.err=null}catch(e){SUG.err=e.status===404?'Falta instalar el buzón en la base (buzon_sugerencias.sql).':'No se pudieron leer las sugerencias.'}
+  sugBadge();if(S.view==='sugerencias')V.sugerencias.update();else if(S.view==='general')sugAvisoGeneral()}
+const sugNuevas=()=>(SUG.L||[]).filter(x=>!x.visto&&x.estado==='recibida');
+function sugBadge(){const a=$('#sugBtn');if(!a)return;a.classList.toggle('hide',!SUG.puede);const n=sugNuevas().length;a.innerHTML=`Buzón de sugerencias${n?` <span class="sugn">${n}</span>`:''}`}
+function sugAvisoGeneral(){const M=$('#main');if(!M||S.view!=='general')return;let d=$('#sugAviso');const n=sugNuevas().length;
+  if(!SUG.puede||!n){if(d)d.remove();return}
+  if(!d){d=document.createElement('div');d.id='sugAviso';const h=M.querySelector('h1');h?h.after(d):M.prepend(d)}
+  d.innerHTML=`<div class="sugav"><span>💡 Tenés <b>${n}</b> sugerencia${n>1?'s':''} nueva${n>1?'s':''} de los empleados.</span><a class="btn sm" href="#sugerencias">Ver y responder</a></div>`}
+async function sugInit(){
+  let a=null;try{a=window.PORTAL_ACCESO?await window.PORTAL_ACCESO:null}catch(e){}
+  if(!a||a.planta||a.ok===false){SUG.puede=false;sugBadge();return}
+  SUG.yo=a.nombre||a.email||'';let vinc=null;
+  try{const r=await fetch(`${SUPA.url}/rest/v1/panel_horas?id=eq.organigrama_v1&select=valor`,{headers:{apikey:SUPA.key,Authorization:'Bearer '+SUPA.key}});if(r.ok){const j=await r.json();vinc=j[0]?.valor?.usuarios?.[SUG.nodo]||null}}catch(e){}
+  const T=s=>String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').split(/[^A-Z]+/).filter(t=>t.length>1);
+  const J=new Set(T(SUG.nombreJefe));const tn=T(a.nombre);
+  const esJefe=(vinc&&vinc.id&&vinc.id===a.user_id)||(!vinc&&tn.length&&tn.every(t=>J.has(t)))||/marchionno/i.test(a.email||'');
+  SUG.puede=!!(a.es_admin||esJefe);sugBadge();if(!SUG.puede)return;
+  await sugCargar();setInterval(()=>{if(!document.hidden)sugCargar()},SUG.cadaMin*60000);
+  if(location.hash==='#sugerencias')route()}
+
+V.sugerencias={
+mount(){const sb=$('#sugBtn');if(sb)sb.classList.add('on');$('#main').innerHTML=`<h1>Buzón de sugerencias</h1><p class="lead">Ideas de mejora que mandan los empleados desde Mi Spotsline. Cambiá el estado y respondé: el empleado ve la respuesta en su celular. La <b>nota interna</b> no le llega.</p><div id="sugB"></div>`;
+  if(!SUG.puede){$('#sugB').innerHTML='<p class="note">Esta sección la ve el jefe de producción.</p>';return}this.update();sugCargar()},
+unmount(){const sb=$('#sugBtn');if(sb)sb.classList.remove('on')},
+update(){const B=$('#sugB');if(!B)return;if(SUG.err&&!SUG.L){B.innerHTML=`<div class="sugav bad">${esc(SUG.err)}</div>`;return}if(!SUG.L){B.innerHTML='<p class="note">Cargando…</p>';return}
+  const L=SUG.L;const cnt=f=>L.filter(f).length;
+  const F={pend:x=>x.estado==='recibida'||x.estado==='analisis',aprobada:x=>x.estado==='aprobada',implementada:x=>x.estado==='implementada',descartada:x=>x.estado==='descartada',todas:()=>true};
+  const q=SUG.q.trim().toLowerCase();
+  const V2=L.filter(F[SUG.filtro]).filter(x=>(!SUG.cat||x.datos?.cat===SUG.cat)&&(!SUG.area||x.datos?.area===SUG.area)&&(!q||[x.nombre,x.datos?.hoy,x.datos?.propuesta,x.num].join(' ').toLowerCase().includes(q)));
+  const areas=[...new Set(L.map(x=>x.datos?.area).filter(Boolean))].sort();
+  const card=x=>{const c=SUG_CATS[x.datos?.cat]||['💡','Sugerencia'];const e=SUG_EST[x.estado]||[x.estado,''];const p=SUG_PRIO[x.prioridad];
+    return `<div class="sugc ${!x.visto&&x.estado==='recibida'?'nueva':''}" data-sug="${esc(x.id)}" role="button" tabindex="0">
+      <div class="pzh"><span><b>${c[0]} ${esc(c[1])}</b> <span class="note">#${esc(x.num||'')} · ${esc(x.datos?.area||'')}</span></span><span>${p?`<span class="pill ${p[1]}">${p[0]}</span> `:''}<span class="pill ${e[1]}">${e[0]}</span></span></div>
+      <p class="sugt"><span class="note">Hoy:</span> ${esc(x.datos?.hoy)}</p><p class="sugt"><span class="note">Propone:</span> ${esc(x.datos?.propuesta)}</p>
+      <div class="note">${esc(sugNom(x.nombre))} · leg. ${esc(x.legajo)} · ${esc(sugNom(x.sector||''))} · ${esc(sugFH(x.creado))}${x.foto?' · 📷':''}${x.respuesta?' · respondida':''}${x.responsable?' · a cargo: '+esc(x.responsable):''}</div></div>`};
+  const porCat=Object.entries(SUG_CATS).map(([k,c])=>({k,c,n:cnt(x=>x.datos?.cat===k),i:cnt(x=>x.datos?.cat===k&&x.estado==='implementada')})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+  const pers={};for(const x of L){const k=x.pid;(pers[k]=pers[k]||{n:0,i:0,a:0,nombre:x.nombre,sector:x.sector}).n++;if(x.estado==='implementada')pers[k].i++;if(x.estado==='aprobada')pers[k].a++}
+  const top=Object.values(pers).sort((a,b)=>b.i-a.i||b.a-a.a||b.n-a.n).slice(0,8);
+  B.innerHTML=`${SUG.err?`<div class="sugav bad">${esc(SUG.err)}</div>`:''}
+   <div class="kpis" style="grid-template-columns:repeat(5,minmax(0,1fr))">
+    <div class="kpi"><b class="${sugNuevas().length?'poor':''}">${sugNuevas().length}</b><span>nuevas sin ver</span></div>
+    <div class="kpi"><b>${cnt(F.pend)}</b><span>por resolver</span></div>
+    <div class="kpi"><b>${cnt(F.aprobada)}</b><span>aprobadas (en curso)</span></div>
+    <div class="kpi"><b class="good">${cnt(F.implementada)}</b><span>implementadas</span></div>
+    <div class="kpi"><b>${L.length}</b><span>recibidas en total</span></div></div>
+   <div class="grid2" style="grid-template-columns:minmax(0,8fr) minmax(0,4fr)">
+    <section class="panel"><div class="tabs" id="sugTabs">${[['pend','Por resolver'],['aprobada','Aprobadas'],['implementada','Implementadas'],['descartada','Descartadas'],['todas','Todas']].map(([k,t])=>`<button data-f="${k}" class="${SUG.filtro===k?'on':''}">${t} <span class="note">${cnt(F[k])}</span></button>`).join('')}</div>
+     <div class="row" style="margin-bottom:10px"><label class="f">Categoría<select id="sugCat"><option value="">Todas</option>${Object.entries(SUG_CATS).map(([k,c])=>`<option value="${k}" ${SUG.cat===k?'selected':''}>${c[0]} ${esc(c[1])}</option>`).join('')}</select></label>
+      <label class="f">Sector<select id="sugArea"><option value="">Todos</option>${areas.map(a=>`<option ${SUG.area===a?'selected':''}>${esc(a)}</option>`).join('')}</select></label>
+      <label class="f">Buscar<input id="sugQ" value="${esc(SUG.q)}" placeholder="nombre, texto o número"></label></div>
+     ${V2.length?V2.map(card).join(''):'<p class="note">No hay sugerencias en esta vista.</p>'}</section>
+    <section class="panel"><h2>Por categoría</h2>${porCat.length?`<table><tr><th>Categoría</th><th class="n">Recib.</th><th class="n">Implem.</th></tr>${porCat.map(x=>`<tr><td>${x.c[0]} ${esc(x.c[1])}</td><td class="n">${x.n}</td><td class="n">${x.i}</td></tr>`).join('')}</table>`:'<p class="note">Todavía no hay sugerencias.</p>'}
+     <h2 style="margin-top:18px">Los que más aportan</h2>${top.length?`<table><tr><th>Persona</th><th class="n">Envió</th><th class="n">Aprob.</th><th class="n">Implem.</th></tr>${top.map(p=>`<tr><td>${esc(sugNom(p.nombre))}<br><span class="note">${esc(sugNom(p.sector||''))}</span></td><td class="n">${p.n}</td><td class="n">${p.a}</td><td class="n"><b>${p.i}</b></td></tr>`).join('')}</table><p class="note">Sirve para reconocer a quienes proponen mejoras que se implementan.</p>`:'<p class="note">—</p>'}</section></div>`;
+  B.querySelectorAll('#sugTabs [data-f]').forEach(b=>b.onclick=()=>{SUG.filtro=b.dataset.f;this.update()});
+  $('#sugCat').onchange=e=>{SUG.cat=e.target.value;this.update()};$('#sugArea').onchange=e=>{SUG.area=e.target.value;this.update()};
+  $('#sugQ').oninput=e=>{SUG.q=e.target.value;clearTimeout(this.tq);this.tq=setTimeout(()=>{this.update();const i=$('#sugQ');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},300)};
+  B.querySelectorAll('[data-sug]').forEach(d=>{d.onclick=()=>sugDetalle(d.dataset.sug);d.onkeydown=e=>{if(e.key==='Enter')sugDetalle(d.dataset.sug)}})}};
+
+async function sugDetalle(id){const x=(SUG.L||[]).find(z=>z.id===id);if(!x)return;const c=SUG_CATS[x.datos?.cat]||['💡','Sugerencia'];
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="dlg" role="dialog" aria-modal="true" aria-label="Sugerencia ${esc(x.num||'')}" style="width:min(780px,100%);overflow:auto">
+   <div class="pzh" style="align-items:center"><h2 style="margin:0">${c[0]} ${esc(c[1])} <span class="note">#${esc(x.num||'')}</span></h2><button class="btn link" data-x>Cerrar</button></div>
+   <p class="note" style="margin:4px 0 10px">${esc(sugNom(x.nombre))} · legajo ${esc(x.legajo)} · ${esc(sugNom(x.sector||''))} · enviada el ${esc(sugFH(x.creado))} · sector donde aplica: <b>${esc(x.datos?.area||'')}</b></p>
+   <div class="sugbox"><div class="note">Qué pasa hoy</div><p>${esc(x.datos?.hoy)}</p><div class="note">Qué propone</div><p>${esc(x.datos?.propuesta)}</p>
+    ${(x.datos?.gana||[]).length?`<div class="note">Qué se gana, según el empleado</div><p>${x.datos.gana.map(g=>`<span class="pill">${esc(SUG_GANA[g]||g)}</span>`).join(' ')}</p>`:''}
+    ${x.foto?`<div id="sugFoto" class="note">Cargando la foto…</div>`:''}</div>
+   <div class="row" style="margin-top:12px"><label class="f">Estado<select id="sgE">${Object.entries(SUG_EST).map(([k,e])=>`<option value="${k}" ${x.estado===k?'selected':''}>${k==='recibida'?'Recibida (nueva)':e[0]}</option>`).join('')}</select></label>
+    <label class="f">Prioridad<select id="sgP"><option value="">Sin definir</option>${Object.entries(SUG_PRIO).map(([k,p])=>`<option value="${k}" ${x.prioridad===k?'selected':''}>${p[0]}</option>`).join('')}</select></label>
+    <label class="f" style="flex:2 1 200px">A cargo de (opcional)<input id="sgR" value="${esc(x.responsable||'')}" placeholder="quién la lleva adelante" maxlength="80"></label></div>
+   <label class="f" style="margin-top:10px">Respuesta para el empleado <span class="note">(la ve en Mi Spotsline)</span><textarea id="sgT" rows="3" maxlength="800" placeholder="Escribí la respuesta">${esc(x.respuesta?.texto||'')}</textarea></label>
+   <div class="row" style="gap:6px;margin-top:4px" id="sgQ">${Object.entries(SUG_RESP).map(([k,t])=>`<button type="button" class="btn link" data-q="${k}">${esc(SUG_EST[k][0])}: usar texto modelo</button>`).join('')}</div>
+   <label class="f" style="margin-top:10px">Nota interna <span class="note">(no la ve el empleado)</span><textarea id="sgN" rows="2" maxlength="800">${esc(x.nota||'')}</textarea></label>
+   <div class="err" id="sgErr"></div>
+   <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn sec" data-x>Cancelar</button><button class="btn" id="sgGo">Guardar</button></div>
+   ${(x.hist||[]).length?`<h3 style="margin-top:14px">Historial</h3><div class="note">${x.hist.slice().reverse().map(h=>`<div style="padding:4px 0;border-top:1px solid var(--line2)">${esc(sugFH(h.fecha))}${h.por?' · '+esc(h.por):''}${h.estado?' · <b>'+esc(SUG_EST[h.estado]?.[0]||h.estado)+'</b>':''}${h.respuesta?'<br>Respuesta: '+esc(h.respuesta):''}</div>`).join('')}</div>`:''}</div>`;
+  document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
+  m.addEventListener('input',()=>{$('#sgErr').textContent=''});
+  m.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{$('#sgErr').textContent='';const k=b.dataset.q;$('#sgT').value=SUG_RESP[k];$('#sgE').value=k;const t=$('#sgT');t.focus();t.setSelectionRange(t.value.length,t.value.length)});
+  if(!x.visto){x.visto=true;sugBadge();sugRpc('rrhh_sug_marcar_vistas',{p_ids:[x.id]}).catch(()=>{})}
+  if(x.foto){(async()=>{try{const u=SUG.fotos[x.id]||(SUG.fotos[x.id]=await sugRpc('rrhh_sug_foto',{p_id:x.id}));const d=$('#sugFoto');if(d)d.outerHTML=u?`<a href="${esc(u)}" target="_blank" rel="noopener" title="Abrir la foto"><img src="${esc(u)}" alt="Foto que mandó el empleado" class="sugimg"></a>`:'<div class="note">La foto no está disponible.</div>'}catch(e){const d=$('#sugFoto');if(d)d.textContent='No se pudo cargar la foto.'}})()}
+  $('#sgGo').onclick=async()=>{const est=$('#sgE').value,resp=$('#sgT').value.trim();
+    if(['aprobada','implementada','descartada'].includes(est)&&est!==x.estado&&!resp){$('#sgErr').textContent='Escribile una respuesta al empleado: va a ver el cambio de estado.';return}
+    if(est==='descartada'&&resp===SUG_RESP.descartada.trim()){$('#sgErr').textContent='Completá el motivo en la respuesta.';return}
+    const ch={estado:est,prioridad:$('#sgP').value,responsable:$('#sgR').value.trim(),nota:$('#sgN').value.trim()};if(resp)ch.respuesta=resp;
+    if(busy('#sgGo'))return;try{const r=await sugRpc('rrhh_sug_gestionar',{p_id:x.id,p_cambios:ch,p_por:SUG.yo});if(!r||!r.ok){$('#sgErr').textContent='No se pudo guardar.';return}
+      const i=SUG.L.findIndex(z=>z.id===x.id);if(i>=0)SUG.L[i]=r.sugerencia;m.remove();toast('Sugerencia #'+(x.num||'')+' guardada');sugBadge();if(S.view==='sugerencias')V.sugerencias.update()}
+    catch(e){$('#sgErr').textContent='No se pudo guardar. Revisá la conexión.'}finally{done('#sgGo')}}}
+
 /* ---------- arranque ---------- */
 route();
 (async()=>{
@@ -4637,6 +4741,7 @@ route();
 }catch(e){}}
   S.aud=[];db.collection('auditoria').onSnapshot(q=>{S.aud=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==='auditoria')changed('datos')},()=>{});
   S.db=auditar(db);S.live=true;route();
+  if(S.supa)sugInit();
   for(const k of ['productos','centros','personal','motivos','vinculos','ventas','perfiles','colores','pintura_std','motivos_pintura','motivos_armado','armado_std','operarios_cfg','us_std']){
     db.doc('maestro/'+k).onSnapshot(s=>{const prev=JSON.stringify(S.M[k]);S.M[k]=s.exists?s.data():null;S.loaded[k]=true;if(k==='perfiles'&&prev!==JSON.stringify(S.M[k])){route();return}changed('maestro')},()=>{})}
   for(const k of ['pendiente','parametros','stock','ajustes','objetivos','armado_plan','pintura_plan','pantalla','gratificacion','visibilidad'])db.doc('planificacion/'+k).onSnapshot(s=>{S.P[k]=s.exists?s.data():null;changed('plan')},()=>{});
