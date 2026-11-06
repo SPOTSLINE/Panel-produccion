@@ -2315,7 +2315,7 @@ V.ot={keys:[],
 mount(sel,rest){document.body.classList.add('solo');this.pz=null;this.otra=null;this.prep=sel==='prep';if(this.prep){this.keys=[];this.render();return}if(sel==='p'&&rest&&rest.length>=2){this.pz=[decodeURIComponent(rest[0]),rest[1]];this.keys=[];this.render();return}if(sel==='g'&&rest&&rest[0])this.keys=rest[0].split('~').map(kParse);else if(sel)this.keys=[[decodeURIComponent(sel),...(rest||[])]];else this.keys=[];this.render()},
 unmount(){document.body.classList.remove('solo')},
 ctxs(keys){return (keys||this.keys).map(k=>({k,c:ctxKey(k)}))},
-yo(){const id=lsGet('yo');const p=(S.M.personal?.items||[]).find(p=>p.id===id&&p.activo!==false);if(!p)return '';if(cfgOp().pedirClave&&(!p.pinq||lsGet('yoh')!==p.pinq))return '';return id},
+yo(){const po=portalOpVigente();if(po)return po.op;const id=lsGet('yo');const p=(S.M.personal?.items||[]).find(p=>p.id===id&&p.activo!==false);if(!p)return '';if(cfgOp().pedirClave&&(!p.pinq||lsGet('yoh')!==p.pinq))return '';return id},
 goKeys(keys){location.hash=keys.length>1?'ot/g/'+keys.map(kStr).join('~'):keys.length?'ot/'+keys[0].map(x=>encodeURIComponent(String(x))).join('/'):'ot'},
 mismo(cur){return !!(cur&&cur.keys&&cur.keys.length&&cur.keys.length===this.keys.length&&cur.keys.every((k,i)=>k.map(String).join('|')===this.keys[i].map(String).join('|')))},
 render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTML=`<div class="op1">${this.volver()}${dg}</div>`;return}}
@@ -2332,7 +2332,7 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
      cur.maq=ad.maq;cur.ini=ad.ini;cur.corrTs=ad.corrSup.ts;try{localStorage.setItem(CUR.k(s),JSON.stringify(cur))}catch(e){}
      toast('El supervisor corrigió tu tarea: '+(ad.maq||'sin máquina'));if(cur.keys&&cur.keys.length&&this.keys.length&&!A.some(c=>c&&this.mismo(c))){this.goKeys(cur.keys);return}}}
   const leg=(S.M.personal?.items||[]).find(p=>p.id===yo)?.legajo;
-  const head=`${this.volver()}<div class="ophead"><span><b>${esc(persona(yo))}</b>${leg?` <span class="note">legajo ${esc(leg)}</span>`:''}</span><span class="row" style="gap:4px"><button class="btn link" id="oHoy">Mis registros de hoy</button><a class="btn link" href="https://spotsline.github.io/Panel-de-Ausentismo/portal_empleado.html${leg?'?leg='+encodeURIComponent(leg):''}" target="_blank" rel="noopener" title="Vacaciones, recibos, préstamos y pedidos a RRHH" style="text-decoration:none">Mis trámites RRHH</a><button class="btn link" id="oNo">No soy yo</button></span></div>`;
+  const head=`${this.volver()}<div class="ophead"><span><b>${esc(persona(yo))}</b>${leg?` <span class="note">legajo ${esc(leg)}</span>`:''}</span><span class="row" style="gap:4px"><button class="btn link" id="oHoy">Mis registros de hoy</button>${portalOpVigente()?`<a class="btn link" href="${MI_SPOTSLINE_URL}" style="text-decoration:none">‹ Mi Spotsline</a>`:`<a class="btn link" href="https://spotsline.github.io/Panel-de-Ausentismo/portal_empleado.html${leg?'?leg='+encodeURIComponent(leg):''}" target="_blank" rel="noopener" title="Vacaciones, recibos, préstamos y pedidos a RRHH" style="text-decoration:none">Mis trámites RRHH</a><button class="btn link" id="oNo">No soy yo</button>`}</span></div>`;
   if(this.prep){M.innerHTML=`<div class="op1">${head}${PREP.html(true)}</div>`;this.bindHead();PREP.bind(M,yo);return}
   const MM=A.map(c=>c&&c.yo===yo?c:null);const abiertas=[0,1].filter(i=>MM[i]);
   let sl=this.keys.length?MM.findIndex(c=>c&&this.mismo(c)):MM.findIndex(c=>c&&!(c.keys||[]).length);
@@ -3122,7 +3122,7 @@ function permisosDe(p){if(!p)return {};if(p.permisos)return p.permisos;if(p.vist
 function perfiles(){const it=S.M.perfiles?.items;const del=S.M.perfiles?.borrados||[];if(!it||!it.length)return PERF_DEF;return [...it,...PERF_DEF.filter(d=>!it.some(x=>x.id===d.id)&&!del.includes(d.id))]}
 function accesoActivo(){return perfiles().some(p=>p.pin&&permisosDe(p).usuarios)}
 function enModoPlanta(){return !!(window.PORTAL&&window.PORTAL.planta)}
-function perfilActual(){let s=null;try{s=JSON.parse(localStorage.getItem('spl.sesion')||'null')}catch(e){}if(!accesoActivo()&&!enModoPlanta())return perfiles().find(p=>p.id==='plan')||PERF_DEF[0];
+function perfilActual(){{const po=portalOpVigente();if(po&&AREAS_OP_PANEL.includes(po.area)){const per=persObj(po.op);const base=perfiles().find(x=>x.id===po.area);return {id:'op:'+per.id,op:per.id,nombre:per.nombre,area:po.area,vistas:[po.area,'planta','instructivo'],permisos:{cargar:true},pin:per.pinq||'',operario:true,portal:true,base:base?.nombre||null}}}let s=null;try{s=JSON.parse(localStorage.getItem('spl.sesion')||'null')}catch(e){}if(!accesoActivo()&&!enModoPlanta())return perfiles().find(p=>p.id==='plan')||PERF_DEF[0];
   if(s&&s.op)return perfilOperario(s);const p=s&&perfiles().find(x=>x.id===s.id);return p&&p.pin&&p.pin===s.h?p:null}
 /* operario de pintura o armado que entra al panel con su nombre y su clave de operario (la del QR) */
 const AREAS_OP_PANEL=['pintura','armado'];
@@ -3136,7 +3136,7 @@ function aplicarPerfil(){const p=perfilActual();S.perfil=p;const pm=permisosDe(p
   document.querySelectorAll('.rail a[data-v]').forEach(a=>a.classList.toggle('hide',a.dataset.v==='ot'?!(p&&(p.vistas==='*'||(p.vistas||[]).includes('taller'))):!vistaPermitida(a.dataset.v,p)));
   document.querySelectorAll('.rail .grp').forEach(g=>{let n=g.nextElementSibling,vis=false;while(n&&!n.classList.contains('grp')&&n.tagName==='A'){if(!n.classList.contains('hide'))vis=true;n=n.nextElementSibling}g.classList.toggle('hide',!vis)});
   {const bz=$('#bzBtn');if(bz){bz.classList.toggle('hide',!(S.canPlan||S.puedeUsuarios));bz.onclick=e=>{e.preventDefault();modalBuzon()}}}
-  const f=$('#perfilFoot');if(f)f.innerHTML=(accesoActivo()||enModoPlanta())&&p?`${esc(p.nombre)} <button class="btn link" id="pfOut" style="color:inherit">salir</button>`:'';const o=$('#pfOut');if(o)o.onclick=()=>{try{localStorage.removeItem('spl.sesion')}catch(e){}route()}}
+  const f=$('#perfilFoot');if(f)f.innerHTML=(accesoActivo()||enModoPlanta())&&p?`${esc(p.nombre)} <button class="btn link" id="pfOut" style="color:inherit">salir</button>`:'';const o=$('#pfOut');if(o)o.onclick=()=>{if(portalOpVigente()){location.href=MI_SPOTSLINE_URL;return}try{localStorage.removeItem('spl.sesion')}catch(e){}route()};{const r=document.querySelector('.rail');let l=document.getElementById('miSpotLink');if(r&&p&&p.portal){if(!l){l=document.createElement('a');l.id='miSpotLink';l.href=MI_SPOTSLINE_URL;l.textContent='‹ Mi Spotsline';l.style.fontWeight='700';r.insertBefore(l,r.querySelector('a[data-v]'))}}else if(l)l.remove()}}
 const OJO_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const OJO_NO='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.9 17.9A10.8 10.8 0 0 1 12 19C5 19 1 12 1 12a19.6 19.6 0 0 1 5.1-5.9M9.9 5.2A9.9 9.9 0 0 1 12 5c7 0 11 7 11 7a19.7 19.7 0 0 1-3.2 4.2M1 1l22 22"/></svg>';
 const OJO_BTN=`<button type="button" class="ojo" data-ojo title="Mostrar la clave" aria-label="Mostrar la clave">${OJO_SVG}</button>`;
@@ -4728,6 +4728,25 @@ async function sugDetalle(id){const x=(SUG.L||[]).find(z=>z.id===id);if(!x)retur
     if(busy('#sgGo'))return;try{const r=await sugRpc('rrhh_sug_gestionar',{p_id:x.id,p_cambios:ch,p_por:SUG.yo});if(!r||!r.ok){$('#sgErr').textContent='No se pudo guardar.';return}
       const i=SUG.L.findIndex(z=>z.id===x.id);if(i>=0)SUG.L[i]=r.sugerencia;m.remove();toast('Sugerencia #'+(x.num||'')+' guardada');sugBadge();if(S.view==='sugerencias')V.sugerencias.update()}
     catch(e){$('#sgErr').textContent='No se pudo guardar. Revisá la conexión.'}finally{done('#sgGo')}}}
+
+/* ---------- entrada desde Mi Spotsline (app única del empleado) ----------
+   Mi Spotsline deja su sesión en sessionStorage ('rrhh_tok', misma pestaña y mismo sitio). Acá se valida contra
+   Supabase (rrhh_emp_produccion) y, si la persona está habilitada en Producción, entra con su nombre sin elegirlo
+   ni poner la clave de operario. El QR escaneado por fuera sigue funcionando como siempre. */
+const MI_SPOTSLINE_URL='https://spotsline.github.io/Panel-de-Ausentismo/portal_empleado.html#produccion';
+const PORTAL_SB={url:'https://fzylibnqqjznaddgpsjt.supabase.co',key:'sb_publishable_zHONcBODl6nbPiLS3TSrZw_D8MVJqeE'};
+function tokPortal(){try{return sessionStorage.getItem('rrhh_tok')||''}catch(e){return ''}}
+S.portalOp=(()=>{try{const c=JSON.parse(sessionStorage.getItem('spl.portalOp')||'null');return c&&c.tok&&c.tok===tokPortal()?c:null}catch(e){return null}})();
+function portalOpVigente(){const po=S.portalOp;if(!po||!po.op||po.tok!==tokPortal())return null;const per=persObj(po.op);if(!per||per.activo===false)return null;
+  const a=areaDe(po.op);if(AREAS_OP_PANEL.includes(a)&&!per.pinq)return null;return {...po,area:a}}
+async function validarPortalOp(){const t=tokPortal();if(!t){S.portalOp=null;return}
+  try{const r=await fetch(PORTAL_SB.url+'/rest/v1/rpc/rrhh_emp_produccion',{method:'POST',headers:{apikey:PORTAL_SB.key,'Content-Type':'application/json'},body:JSON.stringify({p_token:t})});
+    const j=r.ok?await r.json():null;
+    if(j&&j.ok&&j.habilitado&&j.op){S.portalOp={tok:t,op:j.op,nombre:j.nombre||''};try{sessionStorage.setItem('spl.portalOp',JSON.stringify(S.portalOp))}catch(e){}}
+    else if(r.ok||r.status===400){S.portalOp=null;try{sessionStorage.removeItem('spl.portalOp')}catch(e){}}
+  }catch(e){}
+  if(S.M&&S.M.personal){if(S.view==='login'||S.view==='ot')route();else{try{V[S.view]?.update?.()}catch(e){}}}}
+validarPortalOp();
 
 /* ---------- arranque ---------- */
 route();
