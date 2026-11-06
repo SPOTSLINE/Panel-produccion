@@ -1,4 +1,4 @@
-/* Spotsline · Botón "Generar reporte" del avance semanal del premio (v2 2026-11-03)
+/* Spotsline · Botón "Generar reporte" del avance semanal del premio (v3 2026-11-06)
    Se agrega al panel con:  <script src="reporte.js"></script>  antes de </body>.
    Usa los datos en vivo del panel (GR.calc) y abre una hoja lista para imprimir / guardar en PDF. */
 (function(){
@@ -9,7 +9,7 @@
   function lab(f){var x=d(f);return DS[x.getDay()]+' '+String(x.getDate()).padStart(2,'0')+'/'+String(x.getMonth()+1).padStart(2,'0')}
 
   function datos(){
-    var c=GR.calc(); var rows=(c.W&&c.W.rows||[]).map(function(r){return {f:r.f,u:+r.u||0,obj:+r.obj||0}});
+    var c=GR.calc(); var rows=(c.W&&c.W.rows||[]).map(function(r){return {f:r.f,u:+r.u||0,obj:+r.obj||0}}).filter(function(r){return r.obj>0||r.u>0}); // feriados (objetivo 0) no cuentan
     if(!rows.length) throw new Error('No hay días cargados en la semana.');
     var hoy=c.hoy, R=rows.filter(function(r){return r.f===hoy})[0], cerrado;
     var objDia, objNow;
@@ -19,7 +19,7 @@
     var usHoy=R.u;
     var sum=function(a,fn){return a.filter(fn).reduce(function(s,r){return s+r.u},0)};
     var U1=rows.reduce(function(s,r){return s+r.obj},0), U2=U1*N2/N1, U3=U1*N3/N1;
-    var base=PISO*N1*25*455/8.5, xtra=U1-base*rows.length;
+    var base=PISO*N1*25*455/8.5, xtra=U1-base*rows.length; // rows ya sin feriados
     var hechas=sum(rows,function(r){return r.f<=hoy});
     var prev=sum(rows,function(r){return cerrado?r.f<=hoy:r.f<hoy});
     var diasR=rows.filter(function(r){return cerrado?r.f>hoy:r.f>=hoy}).length;
