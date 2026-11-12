@@ -1,7 +1,21 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<script src="/Paneldepaneles/candado.js" data-panel="produccion" data-sin-login="ot,pantalla,ingreso,pintura,armado,mant"></script>
+<script>/* Entrada de operarios (Mi Spotsline, QR, celular o PC de sector): antes de que el candado decida, si este equipo es
+   de un operario y no tiene sesión del Panel de Paneles, la dirección se lleva a su pantalla de operario. Así una recarga,
+   el botón atrás o abrir la dirección sin #… nunca lo mandan a ingresar al Panel de Paneles. */
+(function(){try{var LIB='ot,pantalla,ingreso,pintura,armado,mant,planta,instructivo'.split(','),h=(location.hash||'').replace(/^#/,''),v=h.split('/')[0];
+ var ss=function(k){try{return sessionStorage.getItem(k)}catch(e){return null}},ls=function(k){try{return localStorage.getItem(k)}catch(e){return null}};
+ if(ls('sb-fzylibnqqjznaddgpsjt-auth-token'))return; /* tiene sesión del Panel de Paneles: decide el candado */
+ var sup=ss('spl.modoSup')==='1',casa=null;
+ if(ss('rrhh_tok')&&!sup)casa=ss('spl.opCasa')||'ot';
+ else{var se=null;try{se=JSON.parse(ls('spl.sesion')||'null')}catch(e){}
+  if(se&&se.op&&se.area)casa=(se.area==='mantenimiento'||se.area==='matriceria')?'mant':se.area;
+  else if(ls('spl.yo')&&!(se&&se.id))casa='ot'}
+ if(!casa)return;
+ if(LIB.indexOf(v)>=0){if(ss('rrhh_tok')&&!sup&&v&&v!=='planta'&&v!=='instructivo'&&v!=='ingreso'){try{sessionStorage.setItem('spl.opCasa',v==='ot'?'ot':v)}catch(e){}}return}
+ history.replaceState(null,'',location.pathname+location.search+'#'+casa)}catch(e){}})();</script>
+<script src="/Paneldepaneles/candado.js" data-panel="produccion" data-sin-login="ot,pantalla,ingreso,pintura,armado,mant,planta,instructivo"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Spotsline Producción</title>
@@ -311,7 +325,7 @@ body.tvon .app{display:none}
     <a href="#sugerencias" id="sugBtn" class="hide">Buzón de sugerencias</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-11-10 e</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-11-12 a</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -2588,8 +2602,8 @@ bindInicio(yo){const s=$('#oTipo');s.onchange=()=>{this.tipo=s.value;lsSet('ot.t
      <p class="note" style="margin:10px 0 6px">¿Qué vas a hacer?</p><div class="dlgb" style="border:0;padding:0"><div class="opgrid">${Mo.map(m=>`<button class="opbig sec" data-m="${esc(m.id)}">${esc(m.nombre)}</button>`).join('')}</div></div></div>`;
     document.body.appendChild(box);box.onclick=e=>{if(e.target===box||e.target.hasAttribute('data-x'))box.remove()};
     box.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{CUR.set({yo,keys:[],titulo:motivo(b.dataset.m)?.nombre||'',maq:$('#soM').value,ini:ahora(),fecha:today(),tipo:'parada',motivo:b.dataset.m});box.remove();toast('Empezaste a las '+ahora());this.render()})}},
-volver(){const p=perfilActual();const ver=p&&(p.vistas==='*'||(p.vistas||[]).some(v=>v!=='ot'));const dest=p&&p.vistas!=='*'?((p.vistas||[]).find(v=>v!=='ot')||'general'):'general';
-  return cfgOp().volverPanel||ver||!accesoActivo()&&!cfgOp().pedirClave?`<div class="opvolver" style="margin-bottom:10px"><a href="#${dest}" class="btn sec sm">‹ Volver al panel</a></div>`:''},
+volver(){if(portalOpVigente())return '';const p=perfilActual();const ver=p&&(p.vistas==='*'||(p.vistas||[]).some(v=>v!=='ot'));const dest=p&&p.vistas!=='*'?((p.vistas||[]).find(v=>v!=='ot')||'general'):'general';
+  if(enModoPlanta()&&!ver)return '';return cfgOp().volverPanel||ver||!accesoActivo()&&!cfgOp().pedirClave?`<div class="opvolver" style="margin-bottom:10px"><a href="#${dest}" class="btn sec sm">‹ Volver al panel</a></div>`:''},
 bindHead(){const n=$('#oNo');if(n)n.onclick=()=>{try{localStorage.removeItem('spl.yo');localStorage.removeItem('spl.yoh')}catch(e){}this.render()};const h=$('#oHoy');if(h)h.onclick=()=>this.hoy()},
 diag(){const u=appURL();const gh=/github\.io/.test(location.host);
   if(S.supaErr)return `<div class="opcard warn" style="border-color:var(--bad)"><h2>No hay conexión con la base compartida</h2><p class="note">${esc(S.supaDet||'')}</p><p>${S.supaErr==='tabla'?'Falta crear la tabla <b>'+SUPA.tabla+'</b> en Supabase (una sola vez, con el script SQL).':'No se pudo conectar con Supabase. Revisá que el celular tenga internet (datos o wifi) y recargá.'}</p><p class="note">Mientras tanto no se puede cargar la producción desde este celular.</p></div>`;
@@ -5104,6 +5118,7 @@ V.mant=MT;
       if(k){const n=document.querySelector(k);if(n&&n!==document.activeElement)try{n.focus()}catch(x){}}},0)},true)})();
 const fechaOk=(f,def)=>/^(20\d\d|2100)-\d\d-\d\d$/.test(String(f||''))?f:def;
 function route(){const h=(location.hash||'#general').slice(1);let [v,sel,...rest]=h.split('/');if(v==='desvios'){v='indicadores'}else if(v==='fabrica'){v='plan'}else if(v==='planificacion'){v='plan';V.plan.tab='curso'}else if(v==='plan'&&!sel){}let name=V[v]&&!['fabrica','planificacion'].includes(v)?v:'general';
+  if(name!=='ot'&&!perfilActual()&&portalOpVigente()){const c=(()=>{try{return sessionStorage.getItem('spl.opCasa')}catch(e){return null}})();location.hash=c&&c!==name?c:'ot';return}
   if(name!=='ot'&&(accesoActivo()||enModoPlanta())&&!perfilActual()){if(S.view&&S.view!=='login')V[S.view]?.unmount?.();S.view='login';pantallaLogin();return}
   document.body.classList.toggle('solo',name==='ot');aplicarPerfil();if(!vistaPermitida(name)){const p=perfilActual();const prim=p&&p.vistas!=='*'?(p.vistas||[])[0]:'general';if(prim&&prim!==name){location.hash=prim;return}}
   document.querySelectorAll('.rail a[data-v]').forEach(a=>a.classList.toggle('on',a.dataset.v===name));
@@ -5290,9 +5305,20 @@ async function validarPortalOp(){const t=tokPortal();if(!t){S.portalOp=null;retu
 if(modoSup())pantallaLogin.modo='us';
 validarPortalOp();
 
+/* Si el candado no puede abrir el modo planta (usuario Planta del portal con problema), a un operario no se le pide
+   entrar al Panel de Paneles: se le explica y se le ofrece volver a Mi Spotsline. */
+function equipoOperario(){try{if(localStorage.getItem('sb-fzylibnqqjznaddgpsjt-auth-token'))return false;if(sessionStorage.getItem('rrhh_tok')&&sessionStorage.getItem('spl.modoSup')!=='1')return true;const se=JSON.parse(localStorage.getItem('spl.sesion')||'null');return !!(se&&se.op)||!!(localStorage.getItem('spl.yo')&&!(se&&se.id))||['ot','pintura','armado','mant'].includes((location.hash||'').slice(1).split('/')[0])}catch(e){return false}}
+(function(){const fix=n=>{if(!n||n.nodeType!==1||!/Sin acceso a este panel/.test(n.textContent||'')||n.dataset.opfix)return;if(!/modo planta/i.test(n.textContent)||!equipoOperario())return;n.dataset.opfix='1';
+   const card=n.firstElementChild||n;const h=card.querySelector('h2');if(h)h.textContent='Producción no está disponible ahora';const pp=card.querySelector('p');if(pp)pp.innerHTML='No se pudo conectar con la base de Producción. <b>No hace falta que ingreses al Panel de Paneles.</b> Avisale a tu supervisor y probá de nuevo en un rato.';
+   const a=card.querySelector('a');if(a){const mi=(()=>{try{return sessionStorage.getItem('rrhh_tok')}catch(e){return null}})();a.textContent=mi?'Volver a Mi Spotsline':'Probar de nuevo';a.href=mi?MI_SPOTSLINE_URL:location.href;if(!mi)a.onclick=e=>{e.preventDefault();location.reload()}}};
+  const mo=new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)fix(n)});
+  const go=()=>{mo.observe(document.body,{childList:true});document.body.childNodes.forEach(fix)};if(document.body)go();else document.addEventListener('DOMContentLoaded',go)})();
 /* ---------- arranque ---------- */
 route();
 (async()=>{
+  /* esperar a que el candado decida (sesión propia o usuario Planta) antes de pedir datos: si no, con una sesión vieja
+     vencida del Panel de Paneles el primer pedido podía mandar al operario a ingresar al Panel de Paneles */
+  if(window.PORTAL_ACCESO){try{await Promise.race([window.PORTAL_ACCESO,new Promise(r=>setTimeout(r,15000))])}catch(e){}}
   let db=null,user=null;if(window.claude&&window.claude.use){[db,user]=await Promise.all([window.claude.use('db'),window.claude.use('user')])}
   if(!S.uid){let d=lsGet('dev');if(!d){d='dev-'+newId();lsSet('dev',d)}S.uid=d}
   if(!db&&SUPA.url&&SUPA.key){try{db=await supaDB();S.supa=true}catch(e){const msg=String(e&&e.message||e||'');S.supaErr=e&&e.status===404||/42P01|PGRST205|does not exist|Could not find the table/i.test(msg)?'tabla':/updated_at|42703|column/i.test(msg)?'columna':'conexion';S.supaDet=(e&&e.status?'Error '+e.status+': ':'Sin respuesta: ')+msg.slice(0,220);console.error('Supabase',e)}}
