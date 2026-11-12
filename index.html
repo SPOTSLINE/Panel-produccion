@@ -3766,10 +3766,27 @@ leer(wb){const cal={feriados:[],sabados:[]};let hsDia=null;const T={};
     const armada=/SALEN\s*DE\s*PINTURA/i.test(obs);const K=this.keyDe(prod,parte);
     items.push({id:newId(),prod:prod.toUpperCase(),parte:parte.toUpperCase(),color,cant:q,std:st,obs,fecha:cF>=0?PLA.iso(r[cF]):null,armada,us_code:armada?this.grSug(prod,color):null,key:K.key,maestro:K.maestro})}
   return {hoja,oee,ini,hsDia,items,hechas,cal,tiempos:T}},
+/* lo que ya está preparado y todavía no se pintó (órdenes abiertas con preparación, y renglones marcados "ya estaba preparado" del plan anterior) */
+preparadoSinPintar(){const pp=pintadoPorOrden();const P=[];const vistas=new Set();
+  for(const o of S.opint||[]){if(o.estado!=='abierta'||!o.prep)continue;const ok=pp[o.id]?.ok||0;const q=Math.max(0,(+o.cant||0)-ok);vistas.add(o.id);if(q>0)P.push({k:o.key+'·'+nrm(o.color),q,q0:q,o:o.id,ok,n:o.numero})}
+  for(const it of this.data().items||[]){if(it.hecho||!it.prep?.ya||it.opint&&vistas.has(it.opint))continue;if(it.opint){const o=(S.opint||[]).find(x=>x.id===it.opint);if(!o||o.estado!=='abierta')continue;const ok=pp[o.id]?.ok||0;const q=Math.max(0,(+o.cant||0)-ok);vistas.add(o.id);if(q>0)P.push({k:o.key+'·'+nrm(o.color),q,q0:q,o:o.id,ok,n:o.numero});continue}
+    const q=+it.prep.qty||0;if(q>0)P.push({k:it.key+'·'+nrm(it.color),q,o:null,ok:0,n:null})}
+  return P},
+/* al cargar un plan nuevo: lo que ya está preparado no vuelve a quedar para preparar */
+descontarPreparado(items){const P=this.preparadoSinPintar();const ts=new Date().toISOString();const out=[];const res=[];const ligadas=new Set();
+  for(const it of items){const fu=P.filter(x=>x.k===it.key+'·'+nrm(it.color)&&x.q>0);let resto=it.cant;const usadas=[];
+    for(const x of fu){if(resto<=0)break;const t=Math.min(resto,x.q);x.q-=t;resto-=t;usadas.push({...x,t})}
+    const tom=it.cant-resto;if(!tom){out.push(it);continue}
+    const pr={...it,id:resto>0?newId():it.id,cant:tom,cantPlan:it.cant,prep:{ya:true,auto:true,qty:tom,plan:tom,obs:'ya estaba preparado al cargar el plan'+(usadas.some(u=>u.n)?' ('+usadas.filter(u=>u.n).map(u=>u.n).join(', ')+')':''),yo:null,nombre:'carga del plan',ts}};
+    if(usadas.length===1&&usadas[0].o&&usadas[0].t===usadas[0].q0&&!ligadas.has(usadas[0].o)){pr.opint=usadas[0].o;pr.base=-usadas[0].ok;ligadas.add(usadas[0].o)}
+    out.push(pr);if(resto>0)out.push({...it,cant:resto,cantPlan:it.cant});res.push({it,tom,resto,ords:usadas.map(u=>u.n).filter(Boolean)})}
+  return {items:out,res}},
 async importar(f){const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});const R=this.leer(wb);
   if(!R){toast('No encontré la hoja PLAN Pintura con columnas Producto y Cantidad');return}
+  const DP=this.descontarPreparado(R.items);R.items=DP.items;
+  const yaTxt=DP.res.length?`\n\nYa preparado y todavía sin pintar (no aparece para preparar): ${DP.res.length} ${DP.res.length===1?'renglón':'renglones'}, ${nf(DP.res.reduce((a,r)=>a+r.tom,0))} piezas\n`+DP.res.slice(0,12).map(r=>`· ${r.it.prod} ${r.it.parte} ${r.it.color}: ${nf(r.tom)} preparadas${r.resto?`, quedan ${nf(r.resto)} para preparar`:''}${r.ords.length?' ('+r.ords.join(', ')+')':''}`).join('\n')+(DP.res.length>12?`\n· y ${DP.res.length-12} más`:''):'';
   const arm=R.items.filter(i=>i.armada);const sinUS=arm.filter(i=>!i.us_code);
-  if(!confirm(`Se va a cargar el plan de pintura (hoja ${R.hoja}):\n\n${R.items.length} renglones pendientes (${R.hechas} ya realizados, no se traen)\n${arm.length} salen de pintura ya armados${sinUS.length?` (${sinUS.length} sin código de unidades spot: se vinculan después)`:''}\n\n${this.data().items?.length?'Reemplaza el plan de pintura cargado antes. ':''}¿Continuar?`))return;
+  if(!confirm(`Se va a cargar el plan de pintura (hoja ${R.hoja}):\n\n${R.items.length} renglones pendientes (${R.hechas} ya realizados, no se traen)\n${arm.length} salen de pintura ya armados${sinUS.length?` (${sinUS.length} sin código de unidades spot: se vinculan después)`:''}${yaTxt}\n\n${this.data().items?.length?'Reemplaza el plan de pintura cargado antes. ':''}¿Continuar?`))return;
   const cur=this.data();
   await this.guardar({items:R.items,oee:R.oee||1,ini:R.ini||today(),hora:cur.hora??(toMin(cfgA('pintura').ini)/60),hsDia:R.hsDia||cur.hsDia||7.5,cal:R.cal.feriados.length||R.cal.sabados.length?R.cal:(cur.cal||{feriados:[],sabados:[]}),importado:new Date().toISOString(),archivo:f.name,hoja:R.hoja});toast('Plan de pintura cargado')},
 guardar(d){return S.db.doc('planificacion/pintura_plan').set(JSON.parse(JSON.stringify(d)))},
@@ -3791,7 +3808,7 @@ render(B){const D=this.data();const ed=S.canPlan;const its=D.items||[];const des
   const av=this.avance(desde);const ag=this.agenda(D,av);const pend=its.filter(i=>!i.hecho&&ag.R[i.id].falta>0);const listos=its.filter(i=>!pend.includes(i));
   const und=pend.reduce((a,i)=>a+ag.R[i.id].falta,0);const OP=Object.fromEntries((S.opint||[]).map(o=>[o.id,o]));
   const usP=pend.filter(i=>i.armada).reduce((a,i)=>a+ag.R[i.id].falta*(this.usDe(i.us_code)||0),0);
-  const puedeOrden=it=>!it.opint&&!it.hecho&&ag.R[it.id].falta>0&&it.color;for(const id of [...this.sel])if(!its.some(i=>i.id===id&&puedeOrden(i)))this.sel.delete(id);
+  const puedeOrden=it=>!it.opint&&!it.prep?.auto&&!it.hecho&&ag.R[it.id].falta>0&&it.color;for(const id of [...this.sel])if(!its.some(i=>i.id===id&&puedeOrden(i)))this.sel.delete(id);
   const fila=(it,k)=>{const r=ag.R[it.id];const h=av[it.id]||0;const s=this.std(it);const o=it.opint?OP[it.opint]:null;const vivo=!it.hecho&&r.falta>0;const us=it.armada?this.usDe(it.us_code):null;
     return `<tr${it.hecho||!r.falta?' class="off"':''}${ed&&vivo?` draggable="true" data-ppdr="${esc(it.id)}"`:''}>
     ${ed?`<td style="white-space:nowrap">${vivo?'<span class="note" title="Arrastrá para mover" style="cursor:grab;user-select:none;font-size:16px;padding:0 4px">⠿</span>':''}${puedeOrden(it)?`<input type="checkbox" data-ppsel="${esc(it.id)}" ${this.sel.has(it.id)?'checked':''} style="width:auto" title="Seleccionar para crear la orden de pintura">`:''}</td>`:''}<td class="n">${k+1}</td>
