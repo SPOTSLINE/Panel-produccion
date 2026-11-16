@@ -3993,10 +3993,19 @@ leer(wb){const out=[];const cal={feriados:[],sabados:[]};
     const nombre=nrm(sn)==='PINTURA'?'Armado en pintura':(titulo?titulo.charAt(0)+titulo.slice(1).toLowerCase():sn);
     out.push({id:nrm(sn).toLowerCase(),nombre,hoja:sn,oee,ini,hora,hsDia:7.5,items,hechas})}
   return {lineas:out,cal}},
+/* al cargar un plan nuevo: lo que ya tiene orden de armado abierta no se vuelve a agregar; el renglón queda vinculado a esa orden (lo que falta de ella) */
+descontarOrdenes(lineas,cur){const otras=new Set();for(const l of cur.lineas||[])if(!lineas.some(x=>x.id===l.id))for(const it of l.items||[])if(it.oarm)otras.add(it.oarm);
+  const P=oarmAbiertas().filter(o=>!otras.has(o.id)).map(o=>({id:o.id,n:o.numero,code:String(o.code||'').toUpperCase(),q:o.falta,usado:o.hecho||0}));const res=[];
+  for(const L of lineas){const out=[];for(const it of L.items){let resto=it.cant;const partes=[];
+      for(const x of P){if(resto<=0)break;if(x.code!==it.code||x.q<=0)continue;const t=Math.min(resto,x.q);partes.push({...it,id:partes.length||t<it.cant?newId():it.id,cant:t,cantPlan:it.cant,oarm:x.id,base:-x.usado,conOrden:x.n});x.q-=t;x.usado+=t;resto-=t}
+      if(!partes.length){out.push(it);continue}out.push(...partes);if(resto>0)out.push({...it,id:newId(),cant:resto,cantPlan:it.cant});res.push({L:L.nombre,code:it.code,tom:it.cant-resto,resto,ords:partes.map(p=>p.conOrden)})}
+    L.items=out}
+  return res},
 async importar(f){const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});const R=this.leer(wb);
   if(!R.lineas.length){toast('No encontré hojas con columnas Artículo y Cantidad');return}
-  const cur=this.data();const msg=R.lineas.map(l=>`${l.nombre}: ${l.items.length} renglones pendientes (${l.hechas} ya realizados, no se traen)`).join('\n');
-  if(!confirm(`Se va a cargar el plan de armado:\n\n${msg}\n\n${cur.lineas?.length?'Reemplaza el plan cargado antes para esas líneas. ':''}¿Continuar?`))return;
+  const cur=this.data();const DO=this.descontarOrdenes(R.lineas,cur);const msg=R.lineas.map(l=>`${l.nombre}: ${l.items.length} renglones pendientes (${l.hechas} ya realizados, no se traen)`).join('\n');
+  const yaTxt=DO.length?`\n\nYa tienen orden de armado abierta (no se vuelven a agregar, quedan vinculados a la orden): ${DO.length} ${DO.length===1?'renglón':'renglones'}, ${nf(DO.reduce((a,r)=>a+r.tom,0))} unidades\n`+DO.slice(0,12).map(r=>`· ${r.code}: ${nf(r.tom)} en ${r.ords.join(', ')}${r.resto?`, quedan ${nf(r.resto)} sin orden`:''}`).join('\n')+(DO.length>12?`\n· y ${DO.length-12} más`:''):'';
+  if(!confirm(`Se va a cargar el plan de armado:\n\n${msg}${yaTxt}\n\n${cur.lineas?.length?'Reemplaza el plan cargado antes para esas líneas. ':''}¿Continuar?`))return;
   const lin=(cur.lineas||[]).filter(l=>!R.lineas.some(x=>x.id===l.id)&&l.id!=='pintura').concat(R.lineas.map(l=>{const v=(cur.lineas||[]).find(x=>x.id===l.id);return {...l,hsDia:v?.hsDia||l.hsDia,ini:l.ini||today(),hora:l.hora??6}}));
   await this.guardar({...cur,lineas:lin,cal:R.cal.feriados.length||R.cal.sabados.length?R.cal:(cur.cal||{feriados:[],sabados:[]}),importado:new Date().toISOString(),archivo:f.name});toast('Plan de armado cargado')},
 guardar(d){return S.db.doc('planificacion/armado_plan').set(JSON.parse(JSON.stringify(d)))},
@@ -4006,7 +4015,7 @@ std(it){return it.std||stdArm(it.code)||null},
 /* avance: lo armado en el sistema desde que se cargó el plan, por orden de armado vinculada o por código */
 avance(L,desde){const H=oarmHecho();const ligadas=new Set((L.items||[]).map(i=>i.oarm).filter(Boolean));const pool={};
   for(const e of entArm())if(e.tipo==='armado'&&e.fecha>=desde&&!(e.oarm&&ligadas.has(e.oarm))){const c=String(e.code||'').toUpperCase();pool[c]=(pool[c]||0)+(+e.qty||0)}
-  const out={};for(const it of L.items||[]){if(it.hecho){out[it.id]=it.cant;continue}let h=it.oarm?(it.base||0)+(H[it.oarm]||0):0;out[it.id]=h}return out},
+  const out={};for(const it of L.items||[]){if(it.hecho){out[it.id]=it.cant;continue}let h=it.oarm?(it.base||0)+(H[it.oarm]||0):0;if(it.conOrden)h=Math.max(0,Math.min(it.cant,h));out[it.id]=h}return out},
 /* agenda: desde hoy (o el inicio de la línea si es posterior), horas hábiles por día */
 agenda(L,av,cal){const hd=+L.hsDia||7.5,h0=L.hora??6,oee=+L.oee||1;let f=(L.ini&&L.ini>today())?L.ini:today();let usado=0;
   while(!this.habil(f,cal))f=addDays(f,1);
