@@ -326,7 +326,7 @@ body.tvon .app{display:none}
     <a href="#sugerencias" id="sugBtn" class="hide">Buzón de sugerencias</a>
     <a href="#" id="bzBtn" class="hide">Pedidos de mejora</a>
     <div class="foot" id="perfilFoot"></div>
-    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-11-17 a</div>
+    <div class="foot" style="margin-top:0;padding-top:0;font-size:11px;opacity:.45">Versión 2026-11-17 c</div>
   </nav>
   <main id="main"><p class="note">Cargando…</p></main>
 </div>
@@ -461,13 +461,17 @@ function tubo(o,l){
 
 /* ---------- escritura de partes (un doc por día y por quien carga) ---------- */
 let wq=Promise.resolve();
+/* cola de escrituras de partes: si una falla o tarda, no traba las siguientes (antes una escritura fallida dejaba la cola rechazada
+   y una colgada dejaba "Guardando…" para siempre) */
+function errCorto(e){const m=String(e&&e.message||e||'');if(/HTTP 40[13]|jwt/i.test(m))return 'sesión vencida: volvé a entrar desde Mi Spotsline';if(/Failed to fetch|NetworkError|tardó/i.test(m))return 'sin conexión';return m.slice(0,80)}
+function conTope(pr,ms){return Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error('La conexión tardó demasiado')),ms||25000))])}
 function writeParte(fecha,mutate){
-  wq=wq.then(async()=>{
+  wq=wq.catch(()=>{}).then(()=>conTope((async()=>{
     const id=fecha+'_'+uidShort();const cur=S.partes.find(p=>p.id===id);
     const items=cur?JSON.parse(JSON.stringify(cur.items||[])):[];
     mutate(items);
     await S.db.collection('partes').doc(id).set({fecha,cargador:S.uid||null,items,actualizado:new Date().toISOString(),modelo_odoo:'mrp.workcenter.productivity'});
-  });
+  })()));
   return wq;
 }
 
@@ -2147,7 +2151,14 @@ async function supaDB(){const base=`${SUPA.url}/rest/v1/${SUPA.tabla}`;const H={
   const faltan=Object.entries(SEED.maestro||{}).filter(([k])=>!data['maestro/'+k]);
   if(faltan.length){const rows=faltan.map(([k,v])=>({id:'maestro/'+k,valor:v}));const r=await fetch(base,{method:'POST',headers:{...H,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});if(r.ok)for(const x of rows)data[x.id]=x.valor}
   const fire=p=>{for(const x of [...subs])if(x.match(p))x.run()};
-  const guardar=async(p,v)=>{for(let i=1;i<=2;i++){try{const r=await fetch(base,{method:'POST',headers:{...H,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{id:p,valor:v}])});if(r.ok)return;if(i===2)throw new Error(await r.text())}catch(e){if(i===2){toast('No se pudo guardar en la base compartida. Revisá la conexión.');throw e}}}};
+  /* guardar: 3 intentos; si la base rechaza la sesión (401/403, JWT vencido) en un celular de planta, se descarta la sesión de planta
+     guardada para que el candado pida una nueva (Mi Spotsline o equipo registrado) y se reintenta. El error lleva el código para diagnosticar. */
+  const guardar=async(p,v)=>{let ult=null;for(let i=1;i<=3;i++){try{const r=await fetch(base,{method:'POST',headers:{...H,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{id:p,valor:v}])});if(r.ok)return;
+        const t=await r.text().catch(()=>'');ult=new Error('HTTP '+r.status+(t&&t!=='[]'?': '+t.slice(0,120):''));ult.status=r.status;
+        if((r.status===401||r.status===403||/jwt/i.test(t))&&window.PORTAL&&window.PORTAL.planta){try{localStorage.removeItem('spl-planta-sesion')}catch(e){}}}
+      catch(e){ult=e}if(i<3)await new Promise(r=>setTimeout(r,800*i))}
+    console.error('[guardar]',p,ult);try{(S.errGuardar=S.errGuardar||[]).push({t:new Date().toISOString(),p,e:String(ult&&ult.message||ult)})}catch(e){}
+    toast('No se pudo guardar en la base compartida. Revisá la conexión.');throw ult||new Error('sin detalle')};
   const snap=p=>({id:p.split('/').pop(),exists:p in data,data:()=>data[p],metadata:{fromCache:false,hasPendingWrites:false}});
   const ref=p=>({id:p.split('/').pop(),path:p,get:async()=>snap(p),
     set:async d=>{const prev=data[p];data[p]=clone(d);setTimeout(()=>fire(p),0);try{await guardar(p,data[p])}catch(e){if(prev===undefined)delete data[p];else data[p]=prev;fire(p);throw e}},
@@ -2531,7 +2542,7 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
      ${st.map(x=>{const otros=A.filter(a=>a.op_id===o.id&&a.pieza===l.pieza&&a.seq==x.w.seq);return `<button class="oprow ${x===sig?'sig':''}" data-pzseq="${x.w.seq}" style="padding:14px"><b style="font-size:17px">${x.w.seq}. ${esc(tipoNombre(x.w.tipo))} ${esc(x.w.op)}</b>${x===sig?' <span class="pill lamp">sigue</span>':''}${!x.falta?' <span class="pill ok">completa</span>':''}<br><span>${nf(x.h)} hechas de ${nf(l.cant)}, faltan ${nf(x.falta)}${otros.length?`. Ahora: ${otros.map(a=>esc(persona(a.yo))).join(', ')}`:''}</span></button>`}).join('')}</div>`;
     this.bindHead();M.querySelectorAll('[data-pzseq]').forEach(b=>b.onclick=()=>{const x=st.find(z=>z.w.seq==b.dataset.pzseq);if(x&&!x.falta&&!confirm('Esa operación ya está completa. ¿Abrirla igual?'))return;this.goKeys([[oid,li,b.dataset.pzseq]])});return}
   if(!this.keys.length){M.innerHTML=`<div class="op1">${head}${this.inicio()}</div>`;this.bindHead();this.bindInicio(yo);return}
-  const C=this.ctxs();if(C.some(x=>!x.c)){M.innerHTML=`<div class="op1">${head}<div class="opcard"><h2>No encuentro ${C.length>1?'alguna de estas órdenes':'esta orden de trabajo'}</h2><p class="note">Puede estar cerrada o cancelada, o haberse lanzado en otra versión de la página. Hay ${S.ordenes.length} órdenes en la base.</p><button class="opbig sec" id="oLista">Elegir otra orden</button></div></div>`;this.bindHead();$('#oLista').onclick=()=>{location.hash='ot'};return}
+  const C=this.ctxs();if(C.some(x=>!x.c)){M.innerHTML=`<div class="op1">${head}<div class="opcard"><h2>No encuentro ${C.length>1?'alguna de estas órdenes':'esta orden de trabajo'}</h2><p class="note">Puede estar cerrada o cancelada, o haberse lanzado en otra versión de la página. Hay ${S.ordenes.length} órdenes en la base.</p>${this.mismo(mio)?`<p><b>Tenías esta tarea abierta desde las ${esc(mio.ini)}.</b> Como la orden ya no está, no se puede cargar la cantidad acá: descartala y avisale al supervisor para que cargue lo que hiciste.</p><button class="opbig" id="oDescNo">Descartar esta tarea</button>`:''}<button class="opbig sec" id="oLista" style="margin-top:8px">Elegir otra orden</button></div></div>`;this.bindHead();$('#oLista').onclick=()=>{location.hash='ot'};{const d=$('#oDescNo');if(d)d.onclick=()=>{CUR.set(null,sl);toast('Tarea descartada');location.hash='ot'}}return}
   const tipo=C[0].c.w.tipo;const maqs=(S.M.centros?.items||[]).filter(x=>x.tipo===tipo);const mq=lsGet('maq.'+tipo);let maq=maqs.some(x=>x.codigo===mq)?mq:(maqs.length===1?maqs[0].codigo:'');const maqOtra=otraT&&otraT.maq;if(maqOtra&&maq===maqOtra)maq=(maqs.find(x=>x.codigo!==maqOtra)||{}).codigo||'';
   const enc=this.mismo(mio)?mio:null;const multi=C.length>1;
   const infoUna=({c})=>{const {o,l,w}=c;const p=S.prog.get(woKey(o.id,l.pieza,w.seq));const h=p?p.qty:0;const falta=Math.max(0,l.cant-h);const i=l.ops.indexOf(w);
@@ -2560,15 +2571,21 @@ render(){const M=$('#main');if(!M)return;{const dg=this.diag();if(dg){M.innerHTM
   const bP=$('#oPar');if(bP)bP.onclick=()=>this.parada(yo,titulo,enc||{maq:$('#oMaq')?.value||''});
   if(enc&&enc.tipo==='parada')this.bindParadaFin(enc,yo);
   const bM=$('#oMano');if(bM)bM.onclick=()=>this.mano(C[0].c,yo)},
-async terminar(enc,C,yo){const sl=CUR.slot;const Q=C.map((x,i)=>parseInt(document.querySelector(`[data-q="${i}"]`).value,10));const Sc=C.map((x,i)=>parseInt(document.querySelector(`[data-s="${i}"]`).value,10)||0);
-  if(Q.some(q=>!(q>=0))){$('#oErr').textContent=C.length>1?'Poné la cantidad buena de cada orden (0 si no hiciste).':'Poné la cantidad buena que hiciste.';return}
+async terminar(enc,C,yo){const E=$('#oErr');try{const sl=CUR.slot;const Q=C.map((x,i)=>parseInt(document.querySelector(`[data-q="${i}"]`)?.value,10));const Sc=C.map((x,i)=>parseInt(document.querySelector(`[data-s="${i}"]`)?.value,10)||0);
+  if(Q.some(q=>!(q>=0))){E.textContent=C.length>1?'Poné la cantidad buena de cada orden (0 si no hiciste).':'Poné la cantidad buena que hiciste.';return}
   const fin=ahora();const tot=Math.max(1,(diffMin(enc.ini,fin)||1)-(enc.pausa||0));const W=C.map(({c},i)=>(Q[i]+Sc[i])*(c.w.seg||1));const sw=W.reduce((a,b)=>a+b,0);
   let resto=tot;const mins=C.map((x,i)=>{if(i===C.length-1)return Math.max(0,resto);const m=Math.round(tot*(sw?W[i]/sw:1/C.length));resto-=m;return m});
-  {const F=C.flatMap(({c},i)=>faltanParaSoldar(famOrden(c.o),c.l.pieza,c.w.seq,Q[i]+Sc[i]));if(F.length&&!confirm(`Faltan piezas terminadas para soldar:\n${textoFaltan(F)}\n\n¿Guardar igual?`))return}
-  const grupo=C.length>1?'cama-'+newId():null;const obs=$('#oObs').value.trim();if(busy('#oFin'))return;
-  try{await writeParte(enc.fecha,a=>C.forEach(({c},i)=>{const {o,l,w}=c;a.push({id:newId(),tipo:'prod',operario:yo,centro:enc.maq,centro_tipo:centroTipo(enc.maq),op_id:o.id,op_numero:o.numero,articulo:o.articulo,pieza:l.pieza,seq:w.seq,paso:w.op,ini:enc.ini,fin,min:mins[i],qty:Q[i],scrap:Sc[i],seg_std:w.seg||null,std_min:w.seg?Q[i]*w.seg/60:null,fuera_plan:false,
+  /* faltan piezas para soldar: aviso en pantalla y segundo toque (antes era un confirm(), que algunos celulares bloquean y no pasaba nada) */
+  {let F=[];try{F=C.flatMap(({c},i)=>faltanParaSoldar(famOrden(c.o),c.l.pieza,c.w.seq,Q[i]+Sc[i]))}catch(e){console.error(e)}const fk=Q.join(',')+'|'+Sc.join(',');
+   if(F.length&&this._faltOk!==fk){this._faltOk=fk;E.innerHTML='<b>Faltan piezas terminadas para soldar:</b><br>'+esc(textoFaltan(F)).replace(/\n/g,'<br>')+'<br>Si igual soldaste esas cantidades, tocá <b>Guardar igual</b>.';const b=$('#oFin');if(b)b.textContent='Guardar igual';return}}
+  const grupo=C.length>1?'cama-'+newId():null;const obs=$('#oObs')?.value.trim()||'';
+  /* mismos ids si reintenta: si la vez anterior llegó a guardarse no se duplica */
+  const fk2=JSON.stringify([enc.ini,Q,Sc]);if(!this._finIds||this._finIds.k!==fk2)this._finIds={k:fk2,ids:C.map(()=>newId())};const ids=this._finIds.ids;
+  if(busy('#oFin'))return;E.textContent='';
+  try{await writeParte(enc.fecha,a=>C.forEach(({c},i)=>{if(a.some(x=>x.id===ids[i]))return;const {o,l,w}=c;a.push({id:ids[i],tipo:'prod',operario:yo,centro:enc.maq,centro_tipo:centroTipo(enc.maq),op_id:o.id,op_numero:o.numero,articulo:o.articulo,pieza:l.pieza,seq:w.seq,paso:w.op,ini:enc.ini,fin,min:mins[i],qty:Q[i],scrap:Sc[i],seg_std:w.seg||null,std_min:w.seg?Q[i]*w.seg/60:null,fuera_plan:false,
       obs:[obs,grupo?'Cama compartida: '+C.map(x=>'OP '+x.c.o.numero).join(', '):''].filter(Boolean).join('. '),grupo,origen:'qr',ts:new Date().toISOString()})}));
-    CUR.set(null,sl);toast('Guardado');this.render()}catch(e){$('#oErr').textContent='No se pudo guardar. Revisá la conexión y tocá de nuevo.'}finally{done('#oFin')}},
+    this._faltOk=null;this._finIds=null;CUR.set(null,sl);toast('Guardado');this.render()}catch(e){console.error(e);E.textContent='No se pudo guardar ('+errCorto(e)+'). Tocá Terminé de nuevo.'}finally{done('#oFin')}}
+  catch(e){console.error(e);if(E)E.textContent='Hubo un error al terminar: '+String(e&&e.message||e).slice(0,120)+'. Sacale una captura y avisale al supervisor.'}},
 parada(yo,titulo,enc){const sl=CUR.slot;const M=S.M.motivos?.items||[];const box=document.createElement('div');box.className='modal';
   box.innerHTML=`<div class="dlg"><div class="pzh" style="align-items:center"><h2 style="margin:0">¿Qué pasó?</h2><button class="btn link" data-x>Cerrar</button></div><div class="dlgb" style="border:0;padding:0;margin-top:10px"><div class="opgrid">${M.map(m=>`<button class="opbig sec" data-m="${esc(m.id)}">${esc(m.nombre)}</button>`).join('')}</div></div></div>`;
   document.body.appendChild(box);box.onclick=e=>{if(e.target===box||e.target.hasAttribute('data-x'))box.remove()};
@@ -2576,7 +2593,7 @@ parada(yo,titulo,enc){const sl=CUR.slot;const M=S.M.motivos?.items||[];const box
     CUR.set({yo,keys:this.keys,key:this.keys[0],titulo,maq:(vol&&vol.maq)||enc.maq||'',ini:t0,fecha:today(),tipo:'parada',motivo:b.dataset.m,volver:vol},sl);box.remove();toast('Parada desde las '+t0);this.render()})},
 bindParadaFin(enc,yo){const sl=CUR.slot;const b=$('#oFinPar');if(b)b.onclick=async()=>{const fin=ahora();const m=diffMin(enc.ini,fin)||1;if(busy('#oFinPar'))return;
     try{await writeParte(enc.fecha,a=>a.push({id:newId(),tipo:'parada',operario:yo,centro:enc.maq||null,centro_tipo:enc.maq?centroTipo(enc.maq):null,motivo:enc.motivo,ini:enc.ini,fin,min:m,obs:enc.titulo||'',origen:'qr',ts:new Date().toISOString()}));
-      if(enc.volver){CUR.set({...enc.volver,pausa:(enc.volver.pausa||0)+m},sl);toast('Parada guardada. Seguís con la tarea')}else{CUR.set(null,sl);toast('Guardado')}this.render()}catch(e){toast('No se pudo guardar. Tocá de nuevo.')}finally{done('#oFinPar')}};
+      if(enc.volver){CUR.set({...enc.volver,pausa:(enc.volver.pausa||0)+m},sl);toast('Parada guardada. Seguís con la tarea')}else{CUR.set(null,sl);toast('Guardado')}this.render()}catch(e){console.error(e);const tx='No se pudo guardar ('+errCorto(e)+'). Tocá de nuevo.';toast(tx);const b2=$('#oFinPar');if(b2){let d=b2.parentNode.querySelector('.err');if(!d){d=document.createElement('div');d.className='err';b2.before(d)}d.textContent=tx}}finally{done('#oFinPar')}};
   const c=$('#oCancel');if(c&&!(enc.keys||[]).length)c.onclick=()=>{if(confirm('¿Cancelar sin guardar?')){CUR.set(null);this.render()}}},
 agregar(tipo){const ya=new Set(this.keys.map(k=>k.map(String).join('|')));const ws=workordersFor(tipo).filter(x=>!ya.has([x.o.id,x.o.lineas.indexOf(x.l),x.w.seq].map(String).join('|')));const box=document.createElement('div');box.className='modal';
   box.innerHTML=`<div class="dlg"><div class="pzh" style="align-items:center"><h2 style="margin:0">Agregar a la misma cama</h2><button class="btn link" data-x>Cerrar</button></div><p class="note">Órdenes pendientes de ${esc(tipoNombre(tipo))}.</p><input id="agQ" class="opin" placeholder="Buscar OP, artículo o pieza" style="margin-bottom:8px">
@@ -3015,7 +3032,7 @@ function marcarTips(root){root.querySelectorAll('th:not([data-tip]),.kpi>span:no
   new MutationObserver(()=>marcarTips(document.getElementById('main')||document.body)).observe(document.body,{childList:true,subtree:true})}
 
 /* ---------- Taller: pestañas Carga manual / Operarios / Todos los registros ---------- */
-function mutarParte(docId,mut){wq=wq.then(async()=>{const cur=S.partes.find(p=>p.id===docId);if(!cur)throw new Error('no existe');const {id,...rest}=cur;const items=JSON.parse(JSON.stringify(rest.items||[]));mut(items);
+function mutarParte(docId,mut){wq=wq.catch(()=>{}).then(async()=>{const cur=S.partes.find(p=>p.id===docId);if(!cur)throw new Error('no existe');const {id,...rest}=cur;const items=JSON.parse(JSON.stringify(rest.items||[]));mut(items);
   await S.db.collection('partes').doc(docId).set({...rest,items,actualizado:new Date().toISOString()})});return wq}
 /* minutos de un hueco [p,a] que no tapa una tarea abierta desde oa (las tareas en curso no cuentan como sin registrar) */
 function huecoSinAbierta(p,a,oa){const g=a-p;if(oa==null||!isFinite(oa))return g;return g-Math.max(0,a-Math.max(p,oa))}
