@@ -1622,7 +1622,8 @@ editor(){const d=this.draft;
      <td class="n"><input type="number" min="0" step="0.1" value="${w.seg??''}" placeholder="falta" data-o="${pi}.${wi}.seg" ${dis} style="width:80px;text-align:right;${w.seg?'':'border-color:var(--bad)'}"></td>
      <td class="n" data-pzh="${pi}.${wi}">${w.seg?nf(3600/w.seg):'–'}</td><td class="n" data-min="${pi}.${wi}">${w.seg?nf(w.seg/60,3):'–'}</td>${prepTd(p,pi,w,wi)}
      <td class="n" style="white-space:nowrap">${ed?`<button class="btn link" data-mv="${pi}.${wi}.-1" title="Subir">subir</button><button class="btn link" data-mv="${pi}.${wi}.1" title="Bajar">bajar</button><button class="btn link" data-dop="${pi}.${wi}">quitar</button>`:''}</td></tr>`).join('')}</table></div>
-    ${ed?`<button class="btn sec sm" data-aop="${pi}" style="margin-top:6px">Agregar operación</button>`:''}`;
+    ${ed?`<button class="btn sec sm" data-aop="${pi}" style="margin-top:6px">Agregar operación</button>`:''}
+    ${(p.alts||[]).length||ed?`<div style="margin-top:8px"><span class="note">Procesos alternativos (se eligen en la orden cuando hace falta, ej. rotura de máquina):</span> ${(p.alts||[]).map((a,ai)=>`<span class="pill" title="${esc(a.ops.map(w=>w.op+(w.seg?' '+w.seg+' s':'')).join(' · '))}">${esc(a.nombre)}: ${esc(opsTxt(a.ops))}</span>${ed?`<button class="btn link" data-dalt="${pi}.${ai}">quitar</button>`:''}`).join(' ')||'<span class="note">ninguno</span>'}${ed?` <button class="btn link" data-aalt="${pi}">agregar</button>`:''}</div>`:''}`;
   const pz=d.piezas.map((p,pi)=>{const u=this.usos(p.codigo).filter(f=>f!==this.sel);return `<div class="bpz">
     <div class="row"><label class="f" style="flex:2 1 160px">Componente (pieza)<input value="${esc(p.pieza)}" data-p="${pi}.pieza" ${dis}></label>
      <label class="f" style="flex:1 1 120px">Referencia interna<input value="${esc(p.codigo||'')}" data-p="${pi}.codigo" list="dlRefPz" placeholder="ej. AROIN6717" autocomplete="off" ${dis}></label>
@@ -1671,6 +1672,10 @@ bind(){{const vf=$('#bVolForm');if(vf)vf.onclick=()=>{if(this.dirty&&!confirm('H
     re();toast(`Ruta de ${q.codigo} traída de ${r.f}`)};
     i.addEventListener('change',traer);i.addEventListener('input',e=>{if(!e.inputType||e.inputType==='insertReplacementText')traer()})});
   E.querySelectorAll('[data-tprep]').forEach(b=>b.onclick=()=>{const [pi,wi,v]=b.dataset.tprep.split('.').map(Number);this.draft.piezas[pi].ops[wi].prep=v;re()});
+  E.querySelectorAll('[data-dalt]').forEach(b=>b.onclick=()=>{const [pi,ai]=b.dataset.dalt.split('.').map(Number);const p=this.draft.piezas[pi];if(!confirm('¿Quitar el proceso alternativo '+p.alts[ai].nombre+'?'))return;p.alts.splice(ai,1);if(!p.alts.length)delete p.alts;re()});
+  E.querySelectorAll('[data-aalt]').forEach(b=>b.onclick=()=>{const p=this.draft.piezas[+b.dataset.aalt];const T=S.M.centros?.tipos||{};const nom=prompt('Nombre del proceso alternativo (ej. Láser):','');if(!nom)return;
+    const txt=prompt('Operaciones en orden, con los segundos por pieza (ej. LA 12, PL 25):','');if(!txt)return;const ops=txt.split(/[,;-]+/).map(x=>x.trim()).filter(Boolean).map(x=>{const [op,sg]=x.split(/\s+/);return {op:op.toUpperCase(),tipo:tipoDeOp(op),seg:+String(sg||'').replace(',','.')||null}});
+    const mal=ops.filter(w=>!T[w.tipo]);if(!ops.length||mal.length){toast('No hay centro de trabajo para: '+mal.map(w=>w.op).join(', '));return}p.alts=(p.alts||[]).filter(a=>a.nombre!==nom.trim()).concat({nombre:nom.trim(),ops});re()});
   E.querySelectorAll('[data-aop]').forEach(b=>b.onclick=()=>{const p=this.draft.piezas[+b.dataset.aop];const t=p.ops[p.ops.length-1]?.tipo||'GU';p.ops.push({seq:p.ops.length+1,op:t,tipo:t,seg:null,_auto:t});re()});
   E.querySelectorAll('[data-dop]').forEach(b=>b.onclick=()=>{const [pi,wi]=b.dataset.dop.split('.').map(Number);this.draft.piezas[pi].ops.splice(wi,1);re()});
   E.querySelectorAll('[data-mv]').forEach(b=>b.onclick=()=>{const [pi,wi,dd]=b.dataset.mv.split('.').map(Number);const a=this.draft.piezas[pi].ops;const j=wi+dd;if(j<0||j>=a.length){toast(dd<0?'Ya es la primera operación':'Ya es la última operación');return}[a[wi],a[j]]=[a[j],a[wi]];re()});
@@ -3205,16 +3210,75 @@ function corregirActiva(a){if(!puedeEditReg()){toast('Necesitás el permiso Edit
       corrSup:{ts:new Date().toISOString(),por:S.perfil?.nombre||'administrador',motivo:$('#crMot').value.trim(),maq0:a.maq||'',ini0:a.corrSup?.ini0||a.ini,ini1:a.ini,key0:a.key||null}});
     if(cambioOrden)d.parcial=null;if(cx)Object.assign(d,{op_id:cx.o.id,op_numero:cx.o.numero,articulo:cx.o.articulo,pieza:cx.l.pieza,seq:cx.w.seq,paso:cx.w.op});
     if(busy('#crGo'))return;try{await S.db.collection('activas').doc(a.id).set(d);m.remove();toast('Tarea corregida: '+(maq||'sin máquina')+(cx?', OP '+cx.o.numero:''))}catch(e){E.textContent='No se pudo guardar. Probá de nuevo.'}finally{done('#crGo')}}}
+/* ---------- proceso de una pieza en una orden ya lanzada (ej. rotura de máquina): se cambia solo en esa orden; se puede guardar como alternativo en el listado ---------- */
+function opsTxt(ops){return (ops||[]).map(w=>w.op).join(' - ')}
+function tipoDeOp(op){return String(op||'').toUpperCase().replace(/[0-9]+$/,'')}
+function piezaMaestroDe(o,l){const P=S.M.productos?.items||{};const fam=P[o.articulo]?o.articulo:Object.keys(P).find(f=>nrm(f)===nrm(o.articulo||''));if(!fam)return {fam:null,pi:-1,p:null};
+  let pi=(P[fam].piezas||[]).findIndex(q=>q.pieza===l.pieza&&(!l.codigo||!q.codigo||q.codigo===l.codigo));if(pi<0&&l.codigo)pi=(P[fam].piezas||[]).findIndex(q=>q.codigo===l.codigo);return {fam,pi,p:pi>=0?P[fam].piezas[pi]:null}}
+/* registrado por paso (seq) de una pieza de la orden */
+function regPorSeq(o,l){const r={};for(const e of entries())if(e.tipo==='prod'&&e.op_id===o.id&&e.pieza===l.pieza&&e.seq!=null)r[e.seq]=(r[e.seq]||0)+(+e.qty||0);return r}
+/* números de paso del proceso nuevo: los pasos que siguen (misma operación) conservan su número para no perder lo registrado; los nuevos toman números libres, siempre en orden */
+function seqsProceso(old,nuevas,reg){const usadas=new Set();const out=nuevas.map(w=>({...w,seq:null}));let ult=-Infinity;
+  for(const w of out){const m=old.find(x=>x.op===w.op&&!usadas.has(x.seq)&&x.seq>ult);if(m){w.seq=m.seq;usadas.add(m.seq);ult=m.seq}}
+  const ocup=new Set([...Object.keys(reg).map(Number),...usadas]);
+  for(let i=0;i<out.length;i++){if(out[i].seq!=null)continue;const prev=i?out[i-1].seq:0;let next=Infinity;for(let j=i+1;j<out.length;j++)if(out[j].seq!=null){next=out[j].seq;break}
+    let v=null;for(let k=Math.floor(prev)+1;k<next;k++)if(!ocup.has(k)){v=k;break}
+    if(v==null){let a=prev,b=Math.min(next,prev+1);v=(a+b)/2;while(ocup.has(v))v=(a+v)/2}
+    out[i].seq=Math.round(v*1000)/1000;ocup.add(out[i].seq)}
+  return out}
+function modalProceso(o,li){if(!S.canPlan){toast('Solo el planificador puede cambiar el proceso');return}
+  const l=(o.lineas||[])[li];if(!l)return;const T=S.M.centros?.tipos||{};const MP=piezaMaestroDe(o,l);const reg=regPorSeq(o,l);
+  const normal=MP.p?MP.p.ops:null;const alts=MP.p?.alts||[];
+  const opciones=[];if(normal)opciones.push({k:'n',nombre:'Proceso normal (listado)',ops:normal});alts.forEach((a,i)=>opciones.push({k:'a'+i,nombre:'Alternativo: '+a.nombre,ops:a.ops,alt:a.nombre}));opciones.push({k:'x',nombre:'Armar otro proceso',ops:null});
+  let rows=(l.ops||[]).map(w=>({op:w.op,seg:w.seg??''}));let sel='act';
+  const m=document.createElement('div');m.className='modal';
+  const draw=()=>{const ed=sel==='x'||sel==='act';
+   m.innerHTML=`<div class="dlg" style="width:min(620px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Proceso de ${esc(l.pieza)} · OP ${esc(o.numero)}</h2><button class="btn link" data-x>Cerrar</button></div>
+    <p class="note" style="margin-top:4px">${esc(o.articulo)} · ${esc(l.codigo||'')} · ${nf(l.cant)} piezas. El cambio vale solo para esta orden; el listado de operaciones no cambia${l.proceso?.alt?`. <b>Hoy usa un proceso alternativo</b>${l.proceso.motivo?' ('+esc(l.proceso.motivo)+')':''}`:''}.</p>
+    <div class="tw"><table><tr><th>Proceso actual</th><th class="n">seg / pieza</th><th class="n">Registradas</th></tr>${(l.ops||[]).map(w=>`<tr><td>${esc(w.op)}</td><td class="n">${w.seg??'–'}</td><td class="n">${reg[w.seq]?nf(reg[w.seq]):'<span class="note">0</span>'}</td></tr>`).join('')}</table></div>
+    <label class="f" style="margin-top:10px">Pasar a<select id="prSel"><option value="act" ${sel==='act'?'selected':''}>Editar el proceso actual</option>${opciones.map(x=>`<option value="${x.k}" ${sel===x.k?'selected':''}>${esc(x.nombre)}${x.ops?' ('+esc(opsTxt(x.ops))+')':''}</option>`).join('')}</select></label>
+    <div class="tw" style="margin-top:8px"><table><tr><th>#</th><th>Operación</th><th>Centro</th><th class="n">seg / pieza</th><th></th></tr>${rows.map((r,i)=>{const t=tipoDeOp(r.op);return `<tr><td>${i+1}</td><td><input value="${esc(r.op)}" data-pro="${i}" placeholder="ej. LA" style="width:90px" ${ed?'':'disabled'}></td><td>${T[t]?esc(T[t].nombre):r.op?`<span class="poor">sin centro ${esc(t)}</span>`:''}</td><td class="n"><input type="number" min="0" step="0.1" value="${esc(r.seg)}" data-prs="${i}" placeholder="falta" style="width:80px;text-align:right;${r.seg===''||r.seg==null?'border-color:var(--bad)':''}"></td><td class="n" style="white-space:nowrap">${ed?`<button class="btn link" data-prm="${i}.-1">subir</button><button class="btn link" data-prm="${i}.1">bajar</button><button class="btn link" data-prx="${i}">quitar</button>`:''}</td></tr>`}).join('')}</table></div>
+    ${ed?'<button class="btn sec sm" id="prAdd" style="margin-top:6px">Agregar operación</button>':''}
+    <label class="f" style="margin-top:10px">Motivo<input id="prMot" value="${esc(m._mot||'')}" placeholder="ej. rotura de guillotina"></label>
+    ${MP.p&&S.canPlan&&(sel==='x'||sel==='act')?`<label class="f" style="margin-top:8px;flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="prGuar" style="width:auto" ${m._guar?'checked':''}> Guardarlo como proceso alternativo de ${esc(l.pieza)} en el listado ${esc(MP.fam)}</label><label class="f" id="prNomL" style="${m._guar?'':'display:none'}">Nombre del alternativo<input id="prNom" value="${esc(m._nom||'')}" placeholder="ej. Láser"></label>`:''}
+    <p class="note">Los pasos que siguen igual conservan lo ya registrado. Lo registrado en un paso que se saca queda en los registros (horas y OEE), pero deja de contar para el avance de la orden.</p><div class="err" id="prE"></div>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button class="btn sec" data-x>Cancelar</button><button class="btn" id="prGo">Guardar proceso</button></div></div>`;
+   const keep=()=>{m._mot=m.querySelector('#prMot').value;const g=m.querySelector('#prGuar');if(g)m._guar=g.checked;const n=m.querySelector('#prNom');if(n)m._nom=n.value};
+   m.querySelectorAll('[data-pro]').forEach(i=>i.oninput=()=>{rows[+i.dataset.pro].op=i.value.toUpperCase().trim()});m.querySelectorAll('[data-pro]').forEach(i=>i.onchange=()=>{keep();draw()});
+   m.querySelectorAll('[data-prs]').forEach(i=>i.oninput=()=>{rows[+i.dataset.prs].seg=i.value});
+   m.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>{keep();const [i,d]=b.dataset.prm.split('.').map(Number);const j=i+d;if(j<0||j>=rows.length)return;[rows[i],rows[j]]=[rows[j],rows[i]];draw()});
+   m.querySelectorAll('[data-prx]').forEach(b=>b.onclick=()=>{keep();rows.splice(+b.dataset.prx,1);draw()});
+   const ad=m.querySelector('#prAdd');if(ad)ad.onclick=()=>{keep();rows.push({op:'',seg:''});draw()};
+   m.querySelector('#prSel').onchange=e=>{keep();sel=e.target.value;const x=opciones.find(z=>z.k===sel);if(sel==='act')rows=(l.ops||[]).map(w=>({op:w.op,seg:w.seg??''}));else if(x&&x.ops)rows=x.ops.map(w=>({op:w.op,seg:w.seg??''}));else if(sel==='x')rows=[{op:'',seg:''}];draw()};
+   const g=m.querySelector('#prGuar');if(g)g.onchange=()=>{m.querySelector('#prNomL').style.display=g.checked?'':'none'};
+   m.querySelector('#prGo').onclick=async()=>{keep();const E=m.querySelector('#prE');const R=rows.map(r=>({op:String(r.op||'').toUpperCase().trim(),seg:r.seg===''||r.seg==null?null:+r.seg})).filter(r=>r.op);
+     if(!R.length){E.textContent='El proceso necesita al menos una operación.';return}
+     const sinC=R.filter(r=>!T[tipoDeOp(r.op)]);if(sinC.length){E.textContent='No hay centro de trabajo para: '+sinC.map(r=>r.op).join(', ')+'. Usá el código de la operación (ej. LA, GU, PL).';return}
+     if(R.some(r=>r.seg!=null&&!(r.seg>0))){E.textContent='Revisá los segundos por pieza.';return}
+     const mot=(m._mot||'').trim();const old=l.ops||[];const x=opciones.find(z=>z.k===sel);const esNormal=normal&&opsTxt(R)===opsTxt(normal)&&R.every((r,i)=>(r.seg??null)===(normal[i].seg??null));
+     if(!esNormal&&!mot){E.textContent='Poné el motivo (ej. rotura de guillotina).';return}
+     const nuevas=seqsProceso(old,R.map(r=>({op:r.op,tipo:tipoDeOp(r.op),seg:r.seg})),reg);
+     const pierde=old.filter(w=>reg[w.seq]&&!nuevas.some(n=>n.seq===w.seq));
+     if(pierde.length&&!confirm('Estos pasos ya tienen piezas registradas y salen del proceso:\n'+pierde.map(w=>`· ${w.op}: ${nf(reg[w.seq])} registradas`).join('\n')+'\n\nLo registrado queda en los registros (horas y OEE) pero deja de contar para el avance de la orden. ¿Seguir?'))return;
+     const guar=MP.p&&m._guar;const nom=(m._nom||'').trim();if(guar&&!nom){E.textContent='Poné un nombre para el proceso alternativo.';return}
+     const lineas=JSON.parse(JSON.stringify(o.lineas));const L2=lineas[li];const antes=l.proceso?.antes||old.map(w=>({...w}));
+     L2.ops=nuevas;if(esNormal)delete L2.proceso;else L2.proceso={alt:true,nombre:x?.alt||(guar?nom:null)||opsTxt(nuevas),motivo:mot,ts:new Date().toISOString(),por:S.perfil?.nombre||null,antes};
+     if(busy('#prGo'))return;
+     try{await S.db.collection('ordenes').doc(o.id).update({lineas,modificada:new Date().toISOString()});
+       if(guar){const all=JSON.parse(JSON.stringify(S.M.productos));const q=all.items[MP.fam].piezas[MP.pi];q.alts=(q.alts||[]).filter(a=>a.nombre!==nom).concat({nombre:nom,ops:nuevas.map(w=>({op:w.op,tipo:w.tipo,seg:w.seg}))});all.items[MP.fam].actualizado=new Date().toISOString();await S.db.doc('maestro/productos').set(all)}
+       m.remove();toast(`OP ${o.numero} · ${l.pieza}: ${opsTxt(nuevas)}${guar?' (guardado como alternativo)':''}`)}catch(e){E.textContent='No se pudo guardar.'}finally{done('#prGo')}}};
+  document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};draw()}
 /* editar una orden ya lanzada: cantidad, fecha requerida, prioridad, notas y piezas por pieza */
 function editarOrden(o){if(!S.canPlan){toast('Solo el planificador puede editar órdenes');return}
   const m=document.createElement('div');m.className='modal';const L=o.lineas||[];
   m.innerHTML=`<div class="dlg" style="width:min(620px,100%)"><div class="pzh" style="align-items:center"><h2 style="margin:0">Editar OP ${esc(o.numero)}</h2><button class="btn link" data-x>Cerrar</button></div>
    <p class="note">${esc(o.articulo)}. Si cambiás la cantidad del artículo, se recalculan las piezas de cada componente; también podés ajustar cada pieza a mano.</p>
    <div class="row"><label class="f">Cantidad del artículo<input type="number" min="1" id="eoC" value="${o.cantidad}"></label><label class="f">Requerida<input type="date" id="eoF" value="${esc(o.fecha_req||'')}"></label><label class="f">Prioridad<select id="eoP"><option value="normal">Normal</option><option value="urgente" ${o.prioridad==='urgente'?'selected':''}>Urgente</option></select></label></div>
-   <div class="tw" style="margin-top:10px"><table><tr><th>Pieza</th><th class="n">Por artículo</th><th class="n">Hecho (1er paso)</th><th class="n">Piezas</th></tr>${L.map((l,i)=>{const x=l.cant_x_art||(o.cantidad?l.cant/o.cantidad:1);const h=S.prog.get(woKey(o.id,l.pieza,l.ops[0].seq))?.qty||0;return `<tr><td>${esc(l.pieza)}</td><td class="n">${nf(x,x%1?2:0)}</td><td class="n">${nf(h)}</td><td class="n"><input type="number" min="0" data-eol="${i}" value="${l.cant}" style="width:100px;text-align:right"></td></tr>`}).join('')}</table></div>
+   <div class="tw" style="margin-top:10px"><table><tr><th>Pieza</th><th class="n">Por artículo</th><th>Proceso</th><th class="n">Hecho (1er paso)</th><th class="n">Piezas</th></tr>${L.map((l,i)=>{const x=l.cant_x_art||(o.cantidad?l.cant/o.cantidad:1);const h=S.prog.get(woKey(o.id,l.pieza,l.ops[0].seq))?.qty||0;return `<tr><td>${esc(l.pieza)}</td><td class="n">${nf(x,x%1?2:0)}</td><td style="white-space:nowrap">${esc(opsTxt(l.ops))}${l.proceso?.alt?` <span class="pill lamp" title="${esc(l.proceso.motivo||'')}">alternativo</span>`:''} <button class="btn link" data-eorut="${i}" title="Cambiar el proceso de esta pieza solo en esta orden (ej. rotura de máquina)">cambiar</button></td><td class="n">${nf(h)}</td><td class="n"><input type="number" min="0" data-eol="${i}" value="${l.cant}" style="width:100px;text-align:right"></td></tr>`}).join('')}</table></div>
    <label class="f" style="margin-top:10px">Notas<input id="eoN" value="${esc(o.notas||'')}"></label><div class="err" id="eoE"></div>
    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn sec" data-x>Cancelar</button><button class="btn" id="eoGo">Guardar cambios</button></div></div>`;
   document.body.appendChild(m);m.onclick=e=>{if(e.target===m||e.target.hasAttribute('data-x'))m.remove()};
+  m.querySelectorAll('[data-eorut]').forEach(b=>b.onclick=()=>{m.remove();modalProceso(o,+b.dataset.eorut)});
   $('#eoC').oninput=()=>{const c=parseInt($('#eoC').value,10);if(!(c>0))return;L.forEach((l,i)=>{const x=l.cant_x_art||(o.cantidad?l.cant/o.cantidad:1);const el=m.querySelector(`[data-eol="${i}"]`);if(el)el.value=Math.round(c*x)})};
   $('#eoGo').onclick=async()=>{const E=$('#eoE');const c=parseInt($('#eoC').value,10);if(!(c>0)){E.textContent='La cantidad tiene que ser mayor a cero.';return}
     const lineas=JSON.parse(JSON.stringify(L));const baja=[];for(const [i,l] of lineas.entries()){const v=parseInt(m.querySelector(`[data-eol="${i}"]`).value,10);if(!(v>=0)){E.textContent='Revisá las piezas de '+l.pieza+'.';return}const h=S.prog.get(woKey(o.id,l.pieza,l.ops[0].seq))?.qty||0;if(v<h)baja.push(`${l.pieza}: ${nf(h)} hechas, queda en ${nf(v)}`);l.cant=v}
