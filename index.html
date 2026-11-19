@@ -1766,13 +1766,18 @@ bind(){{const vf=$('#bVolForm');if(vf)vf.onclick=()=>{if(this.dirty&&!confirm('H
     if(f==='seg'){w.seg=i.value===''?null:Math.max(0,+i.value)||null;const a=E.querySelector(`[data-pzh="${pi}.${wi}"]`),b=E.querySelector(`[data-min="${pi}.${wi}"]`);if(a)a.textContent=w.seg?nf(3600/w.seg):'–';if(b)b.textContent=w.seg?nf(w.seg/60,3):'–';i.style.borderColor=w.seg?'':'var(--bad)'}
     else if(f==='prep'){w.prep=i.value===''?null:Math.max(0,Math.round(+i.value))}
     else if(f==='tipo'){w.tipo=i.value;if(!w.op||w.op===w._auto){w.op=i.value;w._auto=i.value;const oi=E.querySelector(`[data-o="${pi}.${wi}.op"]`);if(oi)oi.value=w.op}}
-    else w.op=i.value.trim().toUpperCase();this.touch()});
+    else{w.op=i.value.trim().toUpperCase();delete w._auto;
+      /* la operación define la máquina: LA → Láser, PL → Plegadora, GU2 → Guillotina… */
+      const t=opATipo(w.op);if(t&&t!==w.tipo){w.tipo=t;const sl=E.querySelector(`[data-o="${pi}.${wi}.tipo"]`);if(sl)sl.value=t}}this.touch()});
   const re=()=>{this.touch();$('#bEd').innerHTML=this.editor();this.bind();this.touch()};
   E.querySelectorAll('[data-p$=".codigo"]').forEach(i=>{const traer=()=>{const pi=+i.dataset.p.split('.')[0];const p=this.draft.piezas[pi];const r=this.pzRef(i.value,this.sel);if(!r)return;
-    const q=r.q;const firmaR=x=>JSON.stringify((x.ops||[]).map(w=>[w.op,w.tipo,w.seg??null]));if(firmaR(p)===firmaR(q)&&p.pieza)return;
+    const q=r.q;const firmaR=x=>JSON.stringify((x.ops||[]).map(w=>[w.op,w.tipo,w.seg??null]));
+    /* la referencia interna trae siempre su nombre: una misma referencia es siempre la misma pieza */
+    if(firmaR(p)===firmaR(q)){if(p.pieza!==q.pieza||p.codigo!==q.codigo){p.pieza=q.pieza;p.codigo=q.codigo;re()}return}
     const vacia=!p.ops.length||(p.ops.length===1&&!p.ops[0].seg);
+    p.pieza=q.pieza;p.codigo=q.codigo;
     if(!vacia&&!confirm(`La referencia ${q.codigo} ya tiene ruta en ${r.f} (${q.pieza}: ${q.ops.map(w=>w.op).join(' > ')}).\n\n¿Reemplazar la ruta que cargaste por esa?`))return;
-    p.ops=JSON.parse(JSON.stringify(q.ops));p.codigo=q.codigo;p.uom=q.uom||p.uom||'Unidades';if(!p.pieza||!String(p.pieza).trim()||vacia)p.pieza=p.pieza&&String(p.pieza).trim()?p.pieza:q.pieza;
+    p.ops=JSON.parse(JSON.stringify(q.ops));p.codigo=q.codigo;p.uom=q.uom||p.uom||'Unidades';
     if(q.mp&&!(p.mp&&p.mp.codigo))p.mp=JSON.parse(JSON.stringify(q.mp));
     re();toast(`Ruta de ${q.codigo} traída de ${r.f}`)};
     i.addEventListener('change',traer);i.addEventListener('input',e=>{if(!e.inputType||e.inputType==='insertReplacementText')traer()})});
@@ -3153,6 +3158,9 @@ function marcarTips(root){root.querySelectorAll('th:not([data-tip]),.kpi>span:no
 function mutarParte(docId,mut){wq=wq.catch(()=>{}).then(async()=>{const cur=S.partes.find(p=>p.id===docId);if(!cur)throw new Error('no existe');const {id,...rest}=cur;const items=JSON.parse(JSON.stringify(rest.items||[]));mut(items);
   await S.db.collection('partes').doc(docId).set({...rest,items,actualizado:new Date().toISOString()})});return wq}
 /* minutos de un hueco [p,a] que no tapa una tarea abierta desde oa (las tareas en curso no cuentan como sin registrar) */
+/* operación escrita → centro de trabajo: el código exacto (LA), sin el número final (GU2 → GU) o por el nombre del centro (LAS → Láser) */
+function opATipo(op,T){T=T||S.M.centros?.tipos||{};const o=String(op||'').trim().toUpperCase();if(!o)return null;if(T[o])return o;const b=o.replace(/[^A-Z]+$/,'');if(b&&T[b])return b;
+  const n=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();const c=Object.keys(T).filter(k=>b.length>=3&&n(T[k].nombre).startsWith(b));return c.length===1?c[0]:null}
 function huecoSinAbierta(p,a,oa){const g=a-p;if(oa==null||!isFinite(oa))return g;return g-Math.max(0,a-Math.max(p,oa))}
 function resumenDia(es,oa){let prod=0,std=0,stdM=0,par=0,qty=0,scrap=0,gap=0,prev=null;const ord=es.slice().sort((a,b)=>(toMin(a.ini)??0)-(toMin(b.ini)??0));
   for(const e of ord){const a=toMin(e.ini);if(prev!=null){const g=huecoSinAbierta(prev,a,oa);if(g>5)gap+=g}prev=Math.max(prev??0,a+(diffMin(e.ini,e.fin)??(+e.min||0)));
