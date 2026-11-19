@@ -3154,8 +3154,8 @@ function resumenDia(es,oa){let prod=0,std=0,stdM=0,par=0,qty=0,scrap=0,gap=0,pre
     if(e.tipo==='prod'){prod+=minOp(e);if(e.std_min!=null){std+=+e.std_min;stdM+=+e.min||0}qty+=+e.qty||0;scrap+=+e.scrap||0}else if(motivo(e.motivo)?.categoria!=='pausa')par+=minOp(e)}
   return {prod,std,par,qty,scrap,gap,ef:stdM?std/stdM:null,ini:ord[0]?.ini,fin:ord.length?ord.reduce((m,e)=>toMin(e.fin)>toMin(m)?e.fin:m,ord[0].fin):null,n:es.length}}
 /* Tiempo de la jornada (inicio a fin del turno de ese día) que no quedó cubierto por ningún registro: huecos al empezar, en el medio y al terminar.
-   Huecos de hasta 5 min no se cuentan. Días no laborables sin producción cargada: no hay jornada que completar. Hoy se mide hasta la hora actual. */
-function sinRegJornada(es,f,oa){const c=GR.cDia(f,cfgA('taller'));const d=GR.dias()[f]||{};if(!GR.isWork(f)&&!diasExtra().includes(f)&&!d.fin)return null;
+   Huecos de hasta 5 min no se cuentan. Sábados y días no laborables: solo se controla si se cargó el horario de ese día; si no, no hay jornada que completar. Hoy se mide hasta la hora actual. */
+function sinRegJornada(es,f,oa){const c=GR.cDia(f,cfgA('taller'));const d=GR.dias()[f]||{};if(!GR.isWork(f)&&!d.fin)return null;
   const ini=toMin(c.inicio||c.ini||'06:00');let fin=toMin(c.fin||'14:00');if(ini==null||fin==null)return null;
   if(f===today()){const n=new Date();fin=Math.min(fin,n.getHours()*60+n.getMinutes())}if(fin<=ini)return {min:0,ini,fin};
   const iv=es.map(e=>{const x=toMin(e.ini);return x==null?null:[x,x+(diffMin(e.ini,e.fin)??(+e.min||0))]}).filter(Boolean);if(oa!=null&&isFinite(oa))iv.push([oa,1e9]);iv.sort((x,y)=>x[0]-y[0]);
