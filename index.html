@@ -562,12 +562,15 @@ mountForm(){const n=$('#nuevo');
   if(F){const f=S.M.productos?.items?.[F.art];if(f)document.querySelectorAll('#nPrev input[type=checkbox]').forEach(x=>{if(F.off.includes(f.piezas[+x.dataset.i]?.pieza))x.checked=false})}},
 preview(){const art=$('#nArt')?.value.trim();const c=+$('#nCant')?.value||0;const f=S.M.productos?.items?.[art];const box=$('#nPrev');if(!box)return;
   if(!f){box.innerHTML=art?'<p class="note">Ese artículo no está en el maestro.</p>':'';return}
-  let sin=0;const porTipo={};
-  const rows=f.piezas.map((p,i)=>{const q=c*p.cant;const hs=p.ops.reduce((a,w)=>{if(!w.seg){sin++;return a}const h=q*w.seg/3600;porTipo[w.tipo]=(porTipo[w.tipo]||0)+h;return a+h},0);
-    return `<tr><td><input type="checkbox" data-i="${i}" checked style="width:auto"></td><td>${esc(p.pieza)}</td><td class="n">${p.cant}</td><td class="n">${nf(q)}</td><td>${p.ops.map(w=>esc(w.op)).join(' › ')}</td><td class="n">${nf(hs,1)}</td></tr>`}).join('');
+  let sin=0;const porTipo={};if(this._procArt!==art){this._proc={};this._procArt=art}const PR=this._proc;
+  /* pieza con proceso alternativo en el listado: se elige con cuál sale esta orden */
+  const opsDe=(p,i)=>PR[i]!=null&&p.alts?.[PR[i]]?p.alts[PR[i]].ops:p.ops;
+  const rows=f.piezas.map((p,i)=>{const q=c*p.cant;const OPS=opsDe(p,i);const hs=OPS.reduce((a,w)=>{if(!w.seg){sin++;return a}const h=q*w.seg/3600;porTipo[w.tipo]=(porTipo[w.tipo]||0)+h;return a+h},0);
+    return `<tr><td><input type="checkbox" data-i="${i}" checked style="width:auto"></td><td>${esc(p.pieza)}</td><td class="n">${p.cant}</td><td class="n">${nf(q)}</td><td>${p.alts?.length?`<select data-pr="${i}" style="width:auto;padding:4px 8px;margin:0 0 4px" title="Proceso con el que sale esta pieza en esta orden"><option value="">Proceso normal</option>${p.alts.map((a,ai)=>`<option value="${ai}" ${PR[i]===ai?'selected':''}>Alternativo: ${esc(a.nombre)}</option>`).join('')}</select><br>`:''}${OPS.map(w=>esc(w.op)).join(' › ')}${PR[i]!=null?' <span class="pill lamp">alternativo</span>':''}</td><td class="n">${nf(hs,1)}</td></tr>`}).join('');
   box.innerHTML=`<div class="pzh" style="align-items:center;flex-wrap:wrap;gap:8px"><h3 style="margin:0">Piezas que se van a fabricar</h3>${S.puedeMaestro?`<button class="btn sec sm" id="nEdBom">Editar listado de operaciones de ${esc(art)}</button>`:''}</div><div class="tw"><table><tr><th></th><th>Pieza</th><th class="n">x art.</th><th class="n">Total</th><th>Ruta</th><th class="n">Hs std</th></tr>${rows}</table></div>
   <p class="note">${Object.entries(porTipo).map(([t,h])=>`${esc(tipoNombre(t))} ${nf(h,1)} h`).join(', ')}${sin?`. <span class="poor">${sin} pasos sin tiempo estándar: no suman carga.</span>`:''}</p>`;
-  const eb=$('#nEdBom');if(eb)eb.onclick=()=>this.irBom(art)},
+  const eb=$('#nEdBom');if(eb)eb.onclick=()=>this.irBom(art);
+  box.querySelectorAll('[data-pr]').forEach(x=>x.onchange=()=>{const off=[...box.querySelectorAll('input[type=checkbox]')].filter(y=>!y.checked).map(y=>y.dataset.i);PR[+x.dataset.pr]=x.value===''?null:+x.value;this.preview();off.forEach(i=>{const y=box.querySelector(`input[data-i="${i}"]`);if(y)y.checked=false})})},
 irBom(art){if(BOM.dirty&&!confirm('Hay cambios sin guardar en otro listado de operaciones. ¿Descartarlos?'))return;
   const v=id=>$('#'+id)?.value??'';const off=[...document.querySelectorAll('#nPrev input[type=checkbox]')].filter(x=>!x.checked).map(x=>S.M.productos.items[art].piezas[+x.dataset.i]?.pieza).filter(Boolean);
   this._form={art,cant:v('nCant'),fecha:v('nFecha'),pri:v('nPri'),num:v('nNum'),notas:v('nNotas'),off};
@@ -583,10 +586,12 @@ async lanzar(){const err=$('#nErr');const art=$('#nArt').value.trim();const c=pa
   if(!num){const mx=S.ordenes.reduce((a,o)=>Math.max(a,parseInt(String(o.numero).replace(/\D/g,''),10)||0),1000);num=String(mx+1)}
   const id='op-'+num.replace(/[^A-Za-z0-9_-]/g,'-');
   if(S.ordenes.some(o=>o.id===id)){err.textContent='Ya existe una orden con ese número.';return}
-  const lineas=idx.map(i=>{const p=f.piezas[i];return {pieza:p.pieza,codigo:p.codigo||null,cant_x_art:p.cant,cant:c*p.cant,ops:p.ops.map(w=>({...w}))}});
+  const PR=this._procArt===art?this._proc||{}:{};
+  const lineas=idx.map(i=>{const p=f.piezas[i];const a=PR[i]!=null?p.alts?.[PR[i]]:null;const L={pieza:p.pieza,codigo:p.codigo||null,cant_x_art:p.cant,cant:c*p.cant,ops:(a?a.ops:p.ops).map((w,k)=>a?{...w,seq:k+1}:{...w})};
+    if(a)L.proceso={alt:true,nombre:a.nombre,motivo:'Elegido al lanzar la orden',ts:new Date().toISOString(),por:S.perfil?.nombre||null};return L});
   const doc={numero:num,articulo:art,cantidad:c,fecha_req:fecha,prioridad:$('#nPri').value,notas:$('#nNotas').value.trim(),estado:'lanzada',creada:new Date().toISOString(),creada_por:S.uid||null,lineas,modelo_odoo:'mrp.production'};
   if(busy('#nGo'))return;
-  try{await S.db.collection('ordenes').doc(id).set(doc);toast('Orden '+num+' lanzada');this.mountForm();/* apenas se lanza, se abre para imprimir sus órdenes de trabajo */setTimeout(()=>{try{elegirOTs([S.ordenes.find(o=>o.id===id)||{id,...doc}])}catch(e){console.error(e)}},150)}
+  try{await S.db.collection('ordenes').doc(id).set(doc);toast('Orden '+num+' lanzada');this._proc={};this.mountForm();/* apenas se lanza, se abre para imprimir sus órdenes de trabajo */setTimeout(()=>{try{elegirOTs([S.ordenes.find(o=>o.id===id)||{id,...doc}])}catch(e){console.error(e)}},150)}
   catch(e){err.textContent=e?.code==='invalid_argument'?'No tenés permiso para lanzar órdenes.':'No se pudo guardar. Probá de nuevo.'}
   finally{done('#nGo')}},
 update(){const L=$('#lista');if(!L)return;const flt=$('#flt').value;const tp=$('#fltT')?.value||'';
