@@ -392,13 +392,32 @@ const S={db:null,live:false,uid:null,canPlan:true,canWrite:true,
 
 /* ---------- derivados ---------- */
 const woKey=(op,pieza,seq)=>op+'|'+pieza+'|'+seq;
-function entries(){const out=[];for(const p of S.partes)for(const it of (p.items||[]))out.push({...it,_doc:p.id,fecha:p.fecha});return simultaneas(descontarPausas(out))}
+function entries(){const out=[];for(const p of S.partes)for(const it of (p.items||[]))out.push({...it,_doc:p.id,fecha:p.fecha});return simultaneas(camasMismaMaq(descontarPausas(out)))}
+/* Misma persona, misma máquina y horarios que se pisan, cargados como registros separados: es un solo corte (cama compartida).
+   Los minutos de la máquina se reparten entre las órdenes según su tiempo estándar, igual que si se hubiera cargado como cama compartida. */
+/* desde esta fecha (semana de premio 12/11) se aplica; lo anterior queda como se liquidó */
+const CAMA_AUTO_DESDE='2026-11-12';
+function camasMismaMaq(E){const by={};for(const e of E)if(e.tipo==='prod'&&e.fecha>=CAMA_AUTO_DESDE&&e.operario&&e.centro&&toMin(e.ini)!=null&&toMin(e.fin)!=null){const k=e.fecha+'|'+e.operario+'|'+e.centro;(by[k]=by[k]||[]).push(e)}
+  for(const L of Object.values(by)){if(L.length<2)continue;
+    /* unidades: una cama ya cargada como tal cuenta como una sola */
+    const U={};for(const e of L){const k=e.grupo?'g|'+e.grupo:'i|'+e._doc+'|'+e.id;(U[k]=U[k]||[]).push(e)}
+    const us=Object.values(U).map(g=>{const a=toMin(g[0].ini),sp=diffMin(g[0].ini,g[0].fin)||0;const mn=g.reduce((x,e)=>x+(+e.min||0),0);const segs=g.filter(e=>+e.seg_std>0);
+      return {g,a,b:a+sp,sp,mn,w:0,peso:g.reduce((x,e)=>x+((+e.qty||0)+(+e.scrap||0))*(+e.seg_std||0),0),q:g.reduce((x,e)=>x+(+e.qty||0)+(+e.scrap||0),0),todosStd:segs.length===g.length}}).filter(u=>u.sp>0);
+    if(us.length<2)continue;const pts=[...new Set(us.flatMap(u=>[u.a,u.b]))].sort((x,y)=>x-y);let hay=false;
+    for(let i=0;i<pts.length-1;i++){const s0=pts[i],t=pts[i+1];const act=us.filter(u=>u.a<=s0&&u.b>=t);if(!act.length)continue;if(act.length===1){act[0].w+=t-s0;continue}hay=true;
+      /* el tiempo que se pisa se reparte según lo que pesa cada uno (piezas × estándar; si alguno no tiene estándar, en partes iguales) */
+      const std=act.every(u=>u.todosStd&&u.peso>0);const W=act.map(u=>(std?u.peso/u.sp:1)||1);const sw=W.reduce((x,y)=>x+y,0)||1;act.forEach((u,k)=>u.w+=(t-s0)*W[k]/sw)}
+    if(!hay)continue;
+    for(const u of us){if(u.w>=u.sp-0.5)continue;const f=u.w/u.sp;const tot=u.mn*f;const sm=u.mn||1;for(const e of u.g){if(e.min_cama==null)e.min_cama=+e.min||0;e.min=Math.round((+e.min||0)/sm*tot);e.cama_auto=true}}
+    /* para la persona es un solo trabajo: no se vuelve a repartir como "dos máquinas a la vez" */
+    const gid='auto|'+L[0].fecha+'|'+L[0].operario+'|'+L[0].centro;for(const u of us)if(u.g.some(e=>e.cama_auto))for(const e of u.g)if(!e.grupo)e.grupoAuto=gid}
+  return E}
 /* Una persona en dos máquinas a la vez: cada máquina conserva sus minutos (eficiencia por máquina), pero a la persona
    se le cuentan una sola vez. min_op = minutos de la persona en ese registro (el tiempo compartido se reparte entre los registros). */
 const minOp=e=>e.min_op!=null?e.min_op:(+e.min||0);
 function simultaneas(E){const by={};const esPar=e=>e.tipo==='parada'&&motivo(e.motivo)?.categoria!=='pausa';
   for(const e of E)if((e.tipo==='prod'||esPar(e))&&e.operario){const k=e.fecha+'|'+e.operario;(by[k]=by[k]||[]).push(e)}
-  for(const L of Object.values(by)){if(L.length<2||!L.some(e=>e.tipo==='prod'))continue;const U={};for(const e of L){const k=e.grupo?'g|'+e.grupo:'i|'+e._doc+'|'+e.id;(U[k]=U[k]||[]).push(e)}
+  for(const L of Object.values(by)){if(L.length<2||!L.some(e=>e.tipo==='prod'))continue;const U={};for(const e of L){const gg=e.grupo||e.grupoAuto;const k=gg?'g|'+gg:'i|'+e._doc+'|'+e.id;(U[k]=U[k]||[]).push(e)}
     let us=Object.values(U).map(g=>{const a=toMin(g[0].ini),sp=diffMin(g[0].ini,g[0].fin)||0;const tot=g.reduce((x,e)=>x+(+(e.min_bruto??e.min)||0),0);return {g,a,b:a+sp,sp,w:0,par:g[0].tipo!=='prod',def:g[0].tipo==='prod'?Math.max(0,sp-tot):0}}).filter(u=>u.a!=null&&u.sp>0);
     // una parada que ya se descontó adentro de una tarea (carga por QR) no se reparte de nuevo
     us=us.filter(u=>!u.par||!us.some(v=>!v.par&&v.def>=u.sp-1&&v.a<=u.a&&v.b>=u.b));if(us.length<2)continue;
