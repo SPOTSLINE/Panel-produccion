@@ -422,7 +422,9 @@ function simultaneas(E){const by={};const esPar=e=>e.tipo==='parada'&&motivo(e.m
     // una parada que ya se descontó adentro de una tarea (carga por QR) no se reparte de nuevo
     us=us.filter(u=>!u.par||!us.some(v=>!v.par&&v.def>=u.sp-1&&v.a<=u.a&&v.b>=u.b));if(us.length<2)continue;
     const pts=[...new Set(us.flatMap(u=>[u.a,u.b]))].sort((x,y)=>x-y);let hay=false;
-    for(let i=0;i<pts.length-1;i++){const s0=pts[i],t=pts[i+1];const act=us.filter(u=>u.a<=s0&&u.b>=t);if(act.length>1)hay=true;for(const u of act)u.w+=(t-s0)/act.length}
+    for(let i=0;i<pts.length-1;i++){const s0=pts[i],t=pts[i+1];const act=us.filter(u=>u.a<=s0&&u.b>=t);
+      /* registros de la misma máquina que se pisan ya se repartieron como cama compartida: para la persona cuentan como una sola tarea */
+      const mq=u=>!u.par&&u.g[0].centro&&u.g[0].fecha>=CAMA_AUTO_DESDE?'c|'+u.g[0].centro:u;const n=new Set(act.map(mq)).size;if(n>1)hay=true;for(const u of act)u.w+=(t-s0)/n}
     if(!hay)continue;for(const u of us){const f=u.w/u.sp;if(f>0.999)continue;for(const e of u.g){e.min_op=Math.round((+e.min||0)*f*10)/10;e.simul=true}}}
   return E}
 /* Las pausas (refrigerio, categoría Pausa) que caen dentro de un registro de producción del mismo operario y día descuentan minutos de trabajo.
