@@ -3156,6 +3156,8 @@ function sinRegJornada(es,f,oa){const c=GR.cDia(f,cfgA('taller'));const d=GR.dia
   const ini=toMin(c.inicio||c.ini||'06:00');let fin=toMin(c.fin||'14:00');if(ini==null||fin==null)return null;
   if(f===today()){const n=new Date();fin=Math.min(fin,n.getHours()*60+n.getMinutes())}if(fin<=ini)return {min:0,ini,fin};
   const iv=es.map(e=>{const x=toMin(e.ini);return x==null?null:[x,x+(diffMin(e.ini,e.fin)??(+e.min||0))]}).filter(Boolean);if(oa!=null&&isFinite(oa))iv.push([oa,1e9]);iv.sort((x,y)=>x[0]-y[0]);
+  /* trabajó en otro horario (p. ej. turno tarde de 14 a 18): esa jornada no se controla contra el turno de la mañana */
+  if(iv.length&&!iv.some(([x,y])=>x<toMin(c.fin||'14:00')&&y>ini))return null;
   let cur=ini,tot=0;for(const [x,y] of iv){if(cur>=fin)break;if(x>cur){const g=Math.min(x,fin)-cur;if(g>5)tot+=g}cur=Math.max(cur,y)}if(cur<fin&&fin-cur>5)tot+=fin-cur;
   return {min:tot,ini,fin}}
 const minHM=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
