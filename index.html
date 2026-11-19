@@ -125,6 +125,7 @@ tr.click:hover td{background:var(--panel2)}
 .cells{display:flex;gap:2px}
 .cells i{width:26px;height:22px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10.5px;font-weight:600;font-stretch:75%;background:var(--panel2);color:var(--muted)}
 .hide{display:none!important}
+.srj{margin-top:8px;padding:4px 8px;border-radius:6px;background:rgba(229,50,45,.15);border:1px solid #E5322D;font-weight:600;font-size:13px}
 .altbox{margin-top:14px;padding:10px 12px 12px;border:2px dashed #2F6FD6;border-radius:10px;background:rgba(47,111,214,.08)}.altpill{display:inline-block;background:#2F6FD6;color:#fff;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;margin-right:6px;vertical-align:middle}
 .obsf{display:inline-block;margin:6px 0 4px;padding:5px 10px;border-radius:6px;background:#F5C400;color:#111;font-size:15px;font-weight:600;line-height:1.3;border-left:6px solid #E5322D}.obsf b{color:#111}#tvK .obsf{font-size:2.4vh;padding:.6vh 1vw}
 .semy{color:#B88A00}
@@ -3149,6 +3150,15 @@ function resumenDia(es,oa){let prod=0,std=0,stdM=0,par=0,qty=0,scrap=0,gap=0,pre
   for(const e of ord){const a=toMin(e.ini);if(prev!=null){const g=huecoSinAbierta(prev,a,oa);if(g>5)gap+=g}prev=Math.max(prev??0,a+(diffMin(e.ini,e.fin)??(+e.min||0)));
     if(e.tipo==='prod'){prod+=minOp(e);if(e.std_min!=null){std+=+e.std_min;stdM+=+e.min||0}qty+=+e.qty||0;scrap+=+e.scrap||0}else if(motivo(e.motivo)?.categoria!=='pausa')par+=minOp(e)}
   return {prod,std,par,qty,scrap,gap,ef:stdM?std/stdM:null,ini:ord[0]?.ini,fin:ord.length?ord.reduce((m,e)=>toMin(e.fin)>toMin(m)?e.fin:m,ord[0].fin):null,n:es.length}}
+/* Tiempo de la jornada (inicio a fin del turno de ese día) que no quedó cubierto por ningún registro: huecos al empezar, en el medio y al terminar.
+   Huecos de hasta 5 min no se cuentan. Días no laborables sin producción cargada: no hay jornada que completar. Hoy se mide hasta la hora actual. */
+function sinRegJornada(es,f,oa){const c=GR.cDia(f,cfgA('taller'));const d=GR.dias()[f]||{};if(!GR.isWork(f)&&!diasExtra().includes(f)&&!d.fin)return null;
+  const ini=toMin(c.inicio||c.ini||'06:00');let fin=toMin(c.fin||'14:00');if(ini==null||fin==null)return null;
+  if(f===today()){const n=new Date();fin=Math.min(fin,n.getHours()*60+n.getMinutes())}if(fin<=ini)return {min:0,ini,fin};
+  const iv=es.map(e=>{const x=toMin(e.ini);return x==null?null:[x,x+(diffMin(e.ini,e.fin)??(+e.min||0))]}).filter(Boolean);if(oa!=null&&isFinite(oa))iv.push([oa,1e9]);iv.sort((x,y)=>x[0]-y[0]);
+  let cur=ini,tot=0;for(const [x,y] of iv){if(cur>=fin)break;if(x>cur){const g=Math.min(x,fin)-cur;if(g>5)tot+=g}cur=Math.max(cur,y)}if(cur<fin&&fin-cur>5)tot+=fin-cur;
+  return {min:tot,ini,fin}}
+const minHM=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
 const TT={tab:'linea',f:today(),F:{d0:today(),d1:today(),op:'',tipo:'',reg:'',origen:'',q:''},
 init(){const main=$('#main');const nodes=[...main.children].filter(n=>!(n.tagName==='H1'||n.classList.contains('lead')||n.classList.contains('banner')));const wrap=document.createElement('div');wrap.id='tpM';nodes.forEach(n=>wrap.appendChild(n));
   main.insertAdjacentHTML('beforeend','<div id="tPend"></div><div class="tabs ptabs" id="tTabs"><button data-tt="linea">Línea del día</button><button data-tt="manual">Carga manual</button><button data-tt="ops">Operarios</button><button data-tt="sem">Semana</button><button data-tt="todos">Todos los registros</button><button data-tt="asig">Asignación de máquinas</button></div>');
@@ -3170,15 +3180,15 @@ sem(force){const b=$('#tpS');if(!b)return;const ws=this.ws||GR.weekStart(today()
     const d=JSON.parse(JSON.stringify(S.P.objetivos||{}));d.taller=d.taller||{};d.taller.npMax=n/100;try{await S.db.doc('planificacion/objetivos').set(d);toast('Tope: '+n+' %');this.sem(true)}catch(e){toast('No se pudo guardar')}}},
 ops(force){const b=$('#tpO');if(!b)return;if(!force&&b.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;const f=this.f;const E=entries().filter(e=>e.fecha===f);const A=activasVivas();
   const P=(S.M.personal?.items||[]).filter(p=>(p.activo!==false&&areaDe(p.id,f)==='taller')||E.some(e=>e.operario===p.id));
-  const cards=P.map(p=>{const es=E.filter(e=>e.operario===p.id);const a=A.find(x=>x.yo===p.id);const r=resumenDia(es,a&&a.fecha===f?toMin(a.ini):null);const h=S.horas?estadoHoras(p.id,f):null;return {p,r,a,es,h}}).sort((x,y)=>(y.a?4:0)+(y.r.n?2:0)-(y.h?.aus?1:0)-((x.a?4:0)+(x.r.n?2:0)-(x.h?.aus?1:0))||x.p.nombre.localeCompare(y.p.nombre));
-  const tot=resumenDia(E);const conCarga=cards.filter(c=>c.r.n).length;
+  const cards=P.map(p=>{const es=E.filter(e=>e.operario===p.id);const a=A.find(x=>x.yo===p.id);const r=resumenDia(es,a&&a.fecha===f?toMin(a.ini):null);const h=S.horas?estadoHoras(p.id,f):null;const sr=h?.aus||(!r.n&&!a&&h?.k!=='presente')?null:sinRegJornada(es,f,a&&a.fecha===f?toMin(a.ini):null);return {p,r,a,es,h,sr}}).sort((x,y)=>(y.a?4:0)+(y.r.n?2:0)-(y.h?.aus?1:0)-((x.a?4:0)+(x.r.n?2:0)-(x.h?.aus?1:0))||x.p.nombre.localeCompare(y.p.nombre));
+  const tot=resumenDia(E);const conCarga=cards.filter(c=>c.r.n).length;const srT=cards.reduce((x,c)=>x+(c.sr?.min>5?c.sr.min:0),0),srN=cards.filter(c=>c.sr?.min>5).length;
   b.innerHTML=`<section class="panel"><div class="row" style="align-items:flex-end;justify-content:space-between"><label class="f" style="flex:0 1 180px">Día<input type="date" id="toF" value="${esc(f)}"></label>
-   <span class="note">${conCarga} de ${P.length} operarios con carga, ${nf(tot.prod/60,1)} hs productivas, eficiencia <b class="${tot.ef>=.75?'good':tot.ef<.55?'poor':''}">${pct(tot.ef)}</b></span></div></section>
-   <div class="opcards">${cards.map(({p,r,a,h})=>{const est=a?(a.tipo==='parada'?'parada':'trabajando'):h?.aus?'ausente':'libre';
+   <span class="note">${conCarga} de ${P.length} operarios con carga, ${nf(tot.prod/60,1)} hs productivas, eficiencia <b class="${tot.ef>=.75?'good':tot.ef<.55?'poor':''}">${pct(tot.ef)}</b>${srN?`<br><b class="poor">${srN} con jornada incompleta: ${durTxt(srT)} sin registrar</b>`:''}</span></div></section>
+   <div class="opcards">${cards.map(({p,r,a,h,sr})=>{const srx=sr&&sr.min>5?`<div class="srj poor" title="Jornada de ${minHM(sr.ini)} a ${minHM(sr.fin)}: tiempo sin ningún registro (huecos de más de 5 min)">⚠ ${durTxt(sr.min)} sin registrar</div>`:'';const est=a?(a.tipo==='parada'?'parada':'trabajando'):h?.aus?'ausente':'libre';
     return `<button class="opc2 ${est}" data-opv="${esc(p.id)}"><div class="pzh"><span><span class="dot ${est==='trabajando'?'dw':est==='parada'?'dp':'dl'}"></span><b>${esc(p.nombre)}</b></span><span class="note">${p.legajo?'Leg. '+esc(p.legajo):''}</span></div>
      <div class="note" style="min-height:18px">${a?(a.tipo==='parada'?`En parada: ${esc(motivo(a.motivo)?.nombre||'')}, desde ${esc(a.ini)}`:`Ahora en ${esc(a.maq)}: ${esc(a.articulo||'')} ${esc(a.pieza||'')}, desde ${esc(a.ini)}`):h?.aus?`<span class="poor">${esc(h.label)}</span> según el panel de horas`:r.n?`De ${esc(r.ini)} a ${esc(r.fin)}${h?.k==='presente'?', fichó':''}`:`Sin registros este día${h?.k==='presente'?', pero fichó':''}`}</div>
      ${r.n?`<div class="opm"><div><b>${nf(r.prod/60,1)}</b><span>hs prod.</span></div><div><b>${nf(r.par/60,1)}</b><span>hs no prod.</span></div><div><b class="${r.ef==null?'':r.ef>=.75?'good':r.ef<.55?'poor':''}">${pct(r.ef)}</b><span>eficiencia</span></div><div><b>${nf(r.qty)}</b><span>piezas</span></div></div>
-     ${r.gap>5?`<div class="note poor" style="margin-top:6px">${durTxt(r.gap)} sin registrar</div>`:''}`:''}</button>`}).join('')}</div>
+     `:''}${srx}</button>`}).join('')}</div>
    <p class="note">Tocá una tarjeta para ver y corregir el día de esa persona en Carga manual.</p>`;
   $('#toF').onchange=()=>{this.f=$('#toF').value||today();this.ops(true)};
   b.querySelectorAll('[data-opv]').forEach(c=>c.onclick=()=>{this.tab='manual';const tf=$('#tFecha'),to=$('#tOp');tf.value=this.f;to.value=c.dataset.opv;lsSet('op',to.value);V.taller.autoTimes(true);V.taller.update();this.show();try{window.scrollTo(0,0)}catch(e){}})},
