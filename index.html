@@ -2411,7 +2411,7 @@ function filaARegistro(x,fecha,op,nom){const base={Fecha:fecha,Operario:op?perso
 /* ---------- asignación diaria de máquinas (la arma el planificador el día anterior) ---------- */
 const durH=m=>{m=Math.round(m||0);return Math.floor(m/60)+':'+String(m%60).padStart(2,'0')};
 const ASG={f:null,d:null,cargado:null,
-proxHabil(f){let d=addDays(f,1);const X=diasExtra();while([0,6].includes(new Date(d+'T12:00:00').getDay())&&!X.includes(d))d=addDays(d,1);return d},
+proxHabil(f){let d=addDays(f,1);const X=diasExtra();while(([0,6].includes(new Date(d+'T12:00:00').getDay())&&!X.includes(d))||GR.sinProd(d))d=addDays(d,1);return d},
 gente(f){const it=this.d?.items||{};return (S.M.personal?.items||[]).filter(p=>p.activo!==false&&(this.todos||areaDe(p.id,f)==='taller'||(it[p.id]&&((it[p.id].maq||[]).some(Boolean)||it[p.id].aus||it[p.id].obs)))).sort((a,b)=>(areaDe(a.id,f)==='taller'?0:1)-(areaDe(b.id,f)==='taller'?0:1)||a.nombre.localeCompare(b.nombre,'es'))},
 esSec(v){return String(v||'').startsWith('@')},
 lbl(v){return this.esSec(v)?(AREAS_PL[v.slice(1)]||v.slice(1)):v},
@@ -2913,7 +2913,9 @@ const GR={
  dias(){const st=(S.P.gratificacion||{}).dias||{};const o={};for(const f of new Set([...Object.keys(GR_MAN),...Object.keys(st)]))o[f]={...(GR_MAN[f]||{}),...(st[f]||{})};return o},
  m(x){return toMin(x)||0},
  nowMin(){const d=new Date();return d.getHours()*60+d.getMinutes()+d.getSeconds()/60},
- isWork(f){const d=new Date(f+'T12:00:00').getDay();return d>=1&&d<=5},
+ /* día hábil: lunes a viernes, salvo que se haya cargado "sin producción" (0 presentes y sin horas extra) */
+ isWork(f){const d=new Date(f+'T12:00:00').getDay();return d>=1&&d<=5&&!this.sinProd(f)},
+ sinProd(f){const x=this.dias()[f];return !!x&&x.presentes!=null&&x.presentes!==''&&+x.presentes===0&&!(+x.extraPers>0&&+x.extraHoras>0)},
  weekStart(f){const d=new Date(f+'T12:00:00');d.setDate(d.getDate()-((d.getDay()-4+7)%7));return d.toISOString().slice(0,10)},
  topeEf(c){return this.nivEf(c,2)}, /* línea verde = nivel 2 */
  /* minutos productivos desde el inicio del turno hasta t (sin el desayuno) */
@@ -2944,7 +2946,7 @@ const GR={
  escala(c){return this.montos(c).map((m,i)=>money(m)+' desde '+pct1(this.nivEf(c,i+1))).join(' · ')},
  semana(ws,hoy,t,c){const des=this.desde(c);const dias=[];for(let i=0;i<7;i++)dias.push(addDays(ws,i));
    let us=0,pm=0,objA=0,pisoA=0;const rows=[];
-   for(const f of dias){const u=this.usDia(f,c);const lab=this.isWork(f);if(!lab&&u<=0&&!this.dias()[f])continue;const antes=f<des;
+   for(const f of dias){const u=this.usDia(f,c);const lab=this.isWork(f);if(!lab&&u<=0&&(!this.dias()[f]||this.sinProd(f)))continue;const antes=f<des;
      let worked=false,p=0;if(!antes){if(f<hoy){worked=u>0||!!this.dias()[f];p=worked?this.personMin(f,this.dayEnd(f,c),c):0}else if(f===hoy){worked=lab||u>0;p=worked?this.personMin(f,t,c):0}}
      if(worked){us+=u;pm+=p;objA+=this.obj(p,c);pisoA+=this.piso(p,c)}
      const full=this.personMin(f,this.dayEnd(f,c),c);rows.push({f,u,obj:this.obj(full,c),piso:this.piso(full,c),antes,worked,hoy:f===hoy,fut:f>hoy})}
