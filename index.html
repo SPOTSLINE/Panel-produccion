@@ -1004,7 +1004,7 @@ function tvSlideObjetivo(){{const rp=tvSlideReporte();if(rp)return rp}const R=GR
   const hm=m=>{m=Math.round(m);return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
   return `<div class="tvh">Objetivo de la semana <span>semana de premio ${GR.sem(W.ws)} · 1 US = ${nf(c.minUS,1)} min estándar</span></div>
    <div class="tvarea"><div class="tvleft">
-    <div class="tvst ${p>0?'ok':W.ef==null?'neu':'atr'}" style="font-size:3.4vh">${p==null?'Sin datos':p>0?'COBRANDO '+money(p):'TODAVÍA NO COBRA'}<span class="tvn">eficiencia de la semana ${pct1(W.ef)}${(()=>{const x=GR.proximo(W,c);return x?' · faltan '+fm(x.us)+' US para '+money(x.monto):' · nivel máximo'})()}</span></div>
+    <div class="tvst neu" style="font-size:3.4vh">${W.ef==null?'Sin datos':'SEMANA EN CURSO: '+pct1(W.ef)}<span class="tvn">eficiencia de la semana · el premio se define el miércoles al cierre: hay que terminar arriba de ${pct1(c.objEf)}</span></div>
     <div class="row" style="align-items:flex-end;gap:2vw"><div class="tvbig" style="font-size:9vh">${fm(R.usHoy)}<small> US hoy de ${fm(meta)}</small></div>
      <div class="tvst ${!R.L.length?'neu':ok?'ok':'atr'}" style="flex:1">${R.antesTurno?'TURNO POR EMPEZAR':!R.L.length?'SIN ARMADO TODAVÍA':ok?'ADELANTADOS':'ATRASADOS'}${R.L.length?` <b>${ok?'+':'−'}${fm(Math.abs(dif))} US</b>`:''}<span class="tvn">a esta hora deberían ir ${fm(metaNow)} US</span></div></div>
     <div class="tvchart n" style="margin-top:1vh">${GR.chart(R)}</div>
@@ -2967,7 +2967,7 @@ const GR={
  strip(){const R=this.calc();const p=R.W.pay;
    return `<div class="panel grs" data-grgo data-vis="planta.franja_objetivo" role="button" tabindex="0" style="cursor:pointer;display:flex;flex-wrap:wrap;gap:6px 22px;align-items:baseline;padding:10px 16px;text-decoration:none;color:inherit">
     <b>Objetivo</b><span class="note">semana ${this.sem(R.W.ws)}</span>
-    <span>Premio: <b class="${p>0?'good':p===0?'poor':''}">${p==null?'–':money(p)}</b> <span class="note">(eficiencia ${pct1(R.W.ef)})</span></span>
+    <span>Semana: <b>${pct1(R.W.ef)}</b> <span class="note">de eficiencia · el premio se define el miércoles al cierre, arriba de ${pct1(R.c.objEf)}</span></span>
     <span>Hoy: <b>${nf(R.usHoy)}</b> US <span class="note">de ${nf(R.objDay)}</span> · <b class="${R.L.length?(R.diff>=0?'good':'poor'):''}">${R.L.length?(R.diff>=0?'+':'−')+nf(Math.abs(R.diff))+' US '+(R.diff>=0?'adelantados':'atrasados'):'sin armado registrado todavía'}</b></span>
     <span class="note" style="margin-left:auto">ver detalle ›</span></div>`},
  /* umbral de hoy según el avance de la semana (mismo criterio que el reporte): lo que falta ÷ días que quedan, incluido hoy */
@@ -3025,7 +3025,6 @@ const GR={
    return `<section class="panel"><div class="pzh" style="align-items:baseline;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Objetivo · semana ${this.sem(W.ws)}</h2><span class="pill ${R.L.length?(R.diff>=0?'ok':'bad'):''}">${st}</span></div>
     <p class="note" style="margin:6px 0 12px">Mismas cuentas que el Tablero de Planta: cada artículo terminado en Armado suma sus minutos estándar de taller + pintura + armado; 1 US = ${nf(c.minUS,1)} min estándar. Premio por persona con semana completa según la eficiencia de la semana (jueves a miércoles): ${this.escala(c)}. Debajo de ${pct1(c.objEf)} no se cobra.${R.des>W.ws?` Esta semana se cuenta desde el ${fmtD(R.des)} (los días anteriores, marcados con *, no entran).`:''}</p>
     <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
-     <div class="kpi"><b class="${W.pay>0?'good':W.pay===0?'poor':''}" style="font-size:30px">${W.pay==null?'–':money(W.pay)}</b><span>premio de la semana${W.pay>0?' · nivel '+this.nivel(W.ef,c):''}</span><span class="note" style="display:block;margin-top:2px">${W.ef==null?'sin datos':(()=>{const x=this.proximo(W,c);return x?'faltan '+nf(x.us)+' US para '+money(x.monto)+' a esta altura':'nivel máximo alcanzado'})()}</span></div>
      <div class="kpi"><b>${pct1(W.ef)}</b><span>eficiencia de la semana</span><span class="note" style="display:block;margin-top:2px">hoy ${pct1(R.efHoy)} · umbral ${pct1(c.objEf)}</span></div>
      <div class="kpi"><b>${nf(R.usHoy)} <small class="note">/ ${nf(R.objDay)}</small></b><span>US hoy / umbral del día</span><span class="note" style="display:block;margin-top:2px">a esta hora debería llevar ${nf(R.objNow)}</span></div>
      <div class="kpi"><b class="${R.L.length?(R.diff>=0?'good':'poor'):''}">${R.L.length?(R.diff>=0?'+':'−')+nf(Math.abs(R.diff)):'–'}</b><span>US ${R.diff>=0?'de ventaja':'de atraso'} a esta hora</span><span class="note" style="display:block;margin-top:2px">ritmo ${R.ritmo==null?'–':nf(R.ritmo)+' US/h'} · necesario ${R.need==null?'–':nf(R.need)+' US/h'}</span></div></div>
