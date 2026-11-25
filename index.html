@@ -1828,7 +1828,11 @@ async guardar(){const err=$('#bErr');err.textContent='';const d=this.draft;
     if(aplicar){for(const x of prop){const src=clean.piezas.find(p=>p.codigo===x.codigo);const q=all.items[x.f].piezas[x.qi];all.items[x.f].piezas[x.qi]={...q,pieza:src.pieza,ops:JSON.parse(JSON.stringify(src.ops)),uom:src.uom,mp:src.mp?JSON.parse(JSON.stringify(src.mp)):undefined};if(!src.mp)delete all.items[x.f].piezas[x.qi].mp;all.items[x.f].actualizado=clean.actualizado}}
     const v=JSON.parse(JSON.stringify(S.M.vinculos||{items:{}}));for(const [c,f] of Object.entries(v.items))if(f===this.sel&&!vinc.includes(c))delete v.items[c];for(const c of vinc)v.items[c]=this.sel;
     await S.db.doc('maestro/productos').set(all);await S.db.doc('maestro/vinculos').set(v);
-    this.dirty=false;this.draft=null;toast('Listado de operaciones de '+this.sel+' guardado'+(aplicar?`, y la pieza actualizada en ${new Set(prop.map(x=>x.f)).size} listas más`:''));this.render()}
+    this.dirty=false;this.draft=null;toast('Listado de operaciones de '+this.sel+' guardado'+(aplicar?`, y la pieza actualizada en ${new Set(prop.map(x=>x.f)).size} listas más`:''));this.render();
+    /* órdenes abiertas que quedaron con los tiempos viejos */
+    setTimeout(async()=>{try{const L=tiemposDesactualizados(S.ordenes.filter(abierta));if(!L.length)return;
+      if(!confirm(`Hay ${L.length} órdenes abiertas con los tiempos anteriores:\n\n${L.slice(0,8).map(x=>'OP '+x.o.numero+': '+x.ch.slice(0,3).join(', ')+(x.ch.length>3?'…':'')).join('\n')}${L.length>8?'\n…':''}\n\n¿Pasarles los tiempos nuevos? También se recalcula la eficiencia de lo que ya se registró en esas órdenes.`))return;
+      const n=await aplicarTiemposOPs(L);toast(`Tiempos actualizados en ${L.length} órdenes${n?` y ${n} registros`:''}`)}catch(e){toast('No se pudieron actualizar las órdenes')}},600)}
   catch(e){err.textContent='No se pudo guardar. Probá de nuevo.'}finally{done('#bSave')}}
 };
 function slug(s){return String(s).toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'')}
@@ -5019,12 +5023,22 @@ function irAProducto(o){const f=famDeOP(o);if(!f){toast('No encuentro el listado
   BOM.dirty=false;BOM.draft=null;BOM.sel=f;BOM.q='';BOM.volverOP={id:o.id,numero:o.numero};BOM.volverForm=null;V.maestro.tab='prod';location.hash='maestro'}
 function piezaMaestro(o,l){const it=S.M.productos?.items||{};const f=famDeOP(o);let p=f?it[f].piezas.find(x=>(l.codigo&&x.codigo===l.codigo)||x.pieza===l.pieza):null;
   if(!p&&l.codigo){for(const v of Object.values(it)){p=v.piezas.find(x=>x.codigo===l.codigo);if(p)break}}return p}
+/* tiempos del listado de operaciones → órdenes abiertas. Solo cambia el tiempo (seg) de cada paso que sigue igual (mismo número y máquina);
+   si la pieza va por un proceso alternativo, toma los tiempos de ese alternativo. Los registros ya cargados de esas órdenes se recalculan. */
+function opsMaestroLinea(o,l){const p=piezaMaestro(o,l);if(!p)return null;if(l.proceso?.alt){const a=(p.alts||[]).find(x=>x.nombre===l.proceso.nombre);return a?a.ops.map((w,k)=>({...w,seq:w.seq??k+1})):null}return p.ops}
+function tiemposDesactualizados(os){const out=[];for(const o of os){const lineas=JSON.parse(JSON.stringify(o.lineas||[]));const ch=[];
+    for(const l of lineas){const M=opsMaestroLinea(o,l);if(!M)continue;for(const w of l.ops){const m=M.find(x=>x.seq==w.seq&&x.tipo===w.tipo);if(m&&(m.seg??null)!==(w.seg??null)){ch.push(`${l.pieza} ${w.op}: ${w.seg??'–'} → ${m.seg??'–'} s`);w.seg=m.seg??null}}}
+    if(ch.length)out.push({o,lineas,ch})}return out}
+async function recalcRegistrosOP(oid,lineas){const docs=new Set();for(const p of S.partes)for(const it of p.items||[])if(it.op_id===oid)docs.add(p.id);let n=0;
+  for(const d of docs)await mutarParte(d,a=>{for(const it of a){if(it.op_id!==oid||it.tipo!=='prod')continue;const l=lineas.find(x=>x.pieza===it.pieza);const w=l?.ops.find(x=>x.seq==it.seq);if(!w)continue;const seg=w.seg||null;
+    if((it.seg_std??null)!==seg){it.seg_std=seg;it.std_min=seg?(+it.qty||0)*seg/60:null;n++}}});return n}
+async function aplicarTiemposOPs(L){let r=0;for(const x of L){await S.db.collection('ordenes').doc(x.o.id).update({lineas:x.lineas,tiempos_actualizados:new Date().toISOString()});r+=await recalcRegistrosOP(x.o.id,x.lineas)}return r}
 async function actualizarRutaOP(o){const cambios=[];const lineas=JSON.parse(JSON.stringify(o.lineas));let conAvance=false;
-  lineas.forEach(l=>{const p=piezaMaestro(o,l);if(!p)return;const nuevo=p.ops.map(w=>({seq:w.seq,op:w.op,tipo:w.tipo,seg:w.seg??null}));const viejo=l.ops.map(w=>({seq:w.seq,op:w.op,tipo:w.tipo,seg:w.seg??null}));
+  lineas.forEach(l=>{const p0=opsMaestroLinea(o,l);if(!p0)return;const p={ops:p0};const nuevo=p.ops.map(w=>({seq:w.seq,op:w.op,tipo:w.tipo,seg:w.seg??null}));const viejo=l.ops.map(w=>({seq:w.seq,op:w.op,tipo:w.tipo,seg:w.seg??null}));
     if(JSON.stringify(nuevo)!==JSON.stringify(viejo)){cambios.push(l.pieza);if(l.ops.some(w=>S.prog.get(woKey(o.id,l.pieza,w.seq))))conAvance=true;l.ops=nuevo}});
   if(!cambios.length){toast('La OP ya tiene la ruta actual del listado de operaciones');return}
   if(!confirm(`Actualizar la ruta de ${cambios.join(', ')} en la OP ${o.numero} con el listado de operaciones actual?${conAvance?'\n\nOjo: esta OP ya tiene producción cargada. Lo registrado queda asociado al número de paso; si cambió el orden de las operaciones, revisá el avance.':''}`))return;
-  try{await S.db.collection('ordenes').doc(o.id).update({lineas,ruta_actualizada:new Date().toISOString()});toast('Ruta de la OP '+o.numero+' actualizada')}catch(e){toast('No se pudo guardar')}}
+  try{await S.db.collection('ordenes').doc(o.id).update({lineas,ruta_actualizada:new Date().toISOString()});const n=await recalcRegistrosOP(o.id,lineas);toast('Ruta de la OP '+o.numero+' actualizada'+(n?` y ${n} registros recalculados`:''))}catch(e){toast('No se pudo guardar')}}
 
 /* ---------- configuración de operarios (celular con QR) ---------- */
 /* OEE del operario: aviso al terminar una tarea que quedó por debajo del objetivo, y su acumulado del día */
