@@ -2918,6 +2918,7 @@ const GR_HIST=[{"semana": "2026-05-28", "dias": 3, "us": 2607.3, "horas": 568.75
 const GR_PROD=['Aguilar Bryan','Ayala Jose','Azcona Daniel','Diaz Mauro','Ferreyra Santiago','Lick Diego','Lo Russo Marcos','Medina Gabriel','Ruiz Dario','Scola Sebastian','Yelli Matias','Bacchetta Laureano','Fariña Federico','Muñoz Diego','Muñoz Juan','Ramos Brandon','Zelarayan Facundo','Aguilar Gustavo','Barrios Daiana','Diaz Carolina','Lambare Noelia','Leiva Tatiana','Noguera Pedro','Sandoval Miguel','Zuñiga Brenda'];
 const GR_TALLER=['Aguilar Bryan','Ayala Jose','Azcona Daniel','Diaz Mauro','Ferreyra Santiago','Lick Diego','Lo Russo Marcos','Medina Gabriel','Ruiz Dario','Scola Sebastian','Yelli Matias'];
 const GR_RELOJ_DESDE='2026-11-26';
+const GR_DIAS_DESDE='2026-11-26';
 const GR_MAN={'2026-10-22':{presentes:25,parada:0,extraPers:13,extraHoras:4,usManual:996.1,fuente:'Plan armado'},'2026-10-23':{presentes:25,parada:0,extraPers:0,extraHoras:0,usManual:917.7,fuente:'Plan armado'}};
 const GR={
  c(){const g=S.P.gratificacion||{};const o={...GR_DEF};for(const k of Object.keys(GR_DEF))if(g[k]!=null&&g[k]!=='')o[k]=g[k];return o},
@@ -2962,14 +2963,16 @@ const GR={
  pay(ef,c){if(ef==null)return null;const n=this.nivel(ef,c);return n?this.montos(c)[n-1]:0},
  /* cuántas US faltan (con las horas de la semana a hoy) para el próximo nivel */
  proximo(W,c){if(W.ef==null||!W.pm)return null;const n=this.nivel(W.ef,c),M=this.montos(c);if(n>=M.length)return null;return {monto:M[n],us:Math.max(0,this.nivEf(c,n+1)*W.pm/c.minUS-W.us)}},
- escala(c){return this.montos(c).map((m,i)=>money(m)+' desde '+pct1(this.nivEf(c,i+1))).join(' · ')},
+ escala(c){return this.montos(c).map((m,i)=>money(m)+' desde '+pct1(this.nivEf(c,i+1))).join(' · ')+' (semana de 5 días hábiles; con feriados, proporcional a los días hábiles)'},
  semana(ws,hoy,t,c){const des=this.desde(c);const dias=[];for(let i=0;i<7;i++)dias.push(addDays(ws,i));
    let us=0,pm=0,objA=0,pisoA=0;const rows=[];
    for(const f of dias){const u=this.usDia(f,c);const lab=this.isWork(f);if(!lab&&u<=0&&(!this.dias()[f]||this.sinProd(f)))continue;const antes=f<des;
      let worked=false,p=0;if(!antes){if(f<hoy){worked=u>0||!!this.dias()[f];p=worked?this.personMin(f,this.dayEnd(f,c),c):0}else if(f===hoy){worked=lab||u>0;p=worked?this.personMin(f,t,c):0}}
      if(worked){us+=u;pm+=p;objA+=this.obj(p,c);pisoA+=this.piso(p,c)}
      const full=this.personMin(f,this.dayEnd(f,c),c);rows.push({f,u,obj:this.obj(full,c),piso:this.piso(full,c),antes,worked,hoy:f===hoy,fut:f>hoy})}
-   const ef=pm>0?us*c.minUS/pm:null;return {ws,rows,us,pm,objA,pisoA,ef,pay:this.pay(ef,c)}},
+   const ef=pm>0?us*c.minUS/pm:null;const fac=this.facDias(ws);const p0=this.pay(ef,c);return {ws,rows,us,pm,objA,pisoA,ef,fac,pay:p0==null?null:Math.round(p0*fac)}},
+ /* premio proporcional a los días hábiles de la semana (decisión 26/11, desde la semana del 26/11): semana de 5 días = premio completo; con un feriado, 4/5 */
+ facDias(ws){if(ws<GR_DIAS_DESDE)return 1;let n=0;for(let i=0;i<7;i++){const d=addDays(ws,i);if(this.isWork(d)&&this.diaHab(d))n++}return Math.min(5,n)/5},
  calc(){const c=this.c();const hoy=today();const t=this.nowMin();const L=this.lotes(hoy,c);const usHoy=L.reduce((a,l)=>a+l.us,0);
    const finD=this.dayEnd(hoy,c);const pmNow=this.personMin(hoy,t,c),pmDay=this.personMin(hoy,finD,c);const objNow=this.obj(pmNow,c),objDay=this.obj(pmDay,c);
    const ini=this.m(c.inicio),fin=this.m(c.fin);const J=this.jornada(c);const pEl=this.prodMin(t,c);const pLeft=Math.max(0,J-pEl)+Math.max(0,finD-Math.max(t,fin));
