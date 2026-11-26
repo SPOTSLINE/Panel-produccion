@@ -4038,10 +4038,12 @@ const PLP={
 data(){return S.P.pintura_plan||{items:[]}},sel:new Set(),
 /* piezas que salen de pintura ya armadas: código del Objetivo (GR_STD) por producto y color */
 grSug(prod,color){const tk=String(prod||'').toUpperCase().replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);if(!tk.length)return null;const c=nrm(color);
-  const cand=[];for(const [k,v] of USM.todos().map(k=>[k,USM.raw(k)])){const d=String(v[3]||'').toUpperCase();const dt=d.replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);
-    if(!tk.every(t=>dt.some(x=>x===t||x.startsWith(t))))continue;if(c&&!String(color).toUpperCase().split('/').every(w=>{const q=nrm(w).slice(0,4);return !q||nrm(d).includes(q)}))continue;
-    let p=d.length;if(/ACERO|CRUDA|CRUDO|MADERA|CENCO|\(ML\)|CON TUBO/.test(d))p+=100;cand.push([p,k])}
-  cand.sort((a,b)=>a[0]-b[0]);return cand[0]?.[1]||null},
+  /* primero, los códigos de Odoo vinculados al artículo en su listado de operaciones (Maestro): ahí queda establecido qué código es cada artículo; si ninguno es de ese color, se busca por la descripción */
+  const V=S.M.vinculos?.items||{};const vinc=new Set(Object.keys(V).filter(k=>nrm(V[k])===nrm(prod)).map(k=>k.toUpperCase()));
+  for(const usarV of vinc.size?[true,false]:[false]){const cand=[];for(const [k,v] of USM.todos().map(k=>[k,USM.raw(k)])){const d=String(v[3]||'').toUpperCase();const dt=d.replace(/[^A-Z0-9/ ]/g,' ').split(/\s+/).filter(Boolean);
+    if(usarV?!vinc.has(String(k).toUpperCase()):!tk.every(t=>dt.some(x=>x===t||x.startsWith(t))))continue;if(c&&!String(color).toUpperCase().split('/').every(w=>{const q=nrm(w).slice(0,4);return !q||nrm(d).includes(q)}))continue;
+    let p=d.length;if(/ACERO|CRUDA|CRUDO|MADERA|CENCO|\(ML\)|CON TUBO|PUNTA/.test(d))p+=100;cand.push([p,k])}
+    cand.sort((a,b)=>a[0]-b[0]);if(cand[0])return cand[0][1]}return null},
 usDe(code){const st=GR.std(String(code||'').toUpperCase());return st?(st[0]+st[1]+st[2])/GR.c().minUS:null},
 /* pieza del panel que corresponde al renglón: artículo y pieza del maestro, o el texto del plan */
 keyDe(prod,parte){const P=S.M.productos?.items||{};const fa=Object.keys(P).find(f=>nrm(f)===nrm(prod));if(fa){const p=(P[fa].piezas||[]).find(x=>nrm(x.pieza)===nrm(parte));if(p)return {key:pzKey(fa,p,compartidas(),true),maestro:true}}
@@ -4060,7 +4062,7 @@ leer(wb){const cal={feriados:[],sabados:[]};let hsDia=null;const T={};
   for(const r of A.slice(h+1)){const prod=String(r[cP]??'').trim();const q=+r[cC];if(!prod||nrm(prod)==='PRODUCTO'||!(q>0))continue;const re=nrm(cR>=0?r[cR]:'');if(re==='SI'){hechas++;continue}
     const parte=String(r[cT]??'').trim(),color=String(r[cK]??'').trim().toUpperCase(),obs=cO>=0?String(r[cO]??'').trim():'';const st=cS>=0&&+r[cS]>0?+r[cS]:(T[nrm(prod)+'|'+nrm(parte)]||null);
     const armada=/SALEN\s*DE\s*PINTURA/i.test(obs);const K=this.keyDe(prod,parte);
-    items.push({id:newId(),prod:prod.toUpperCase(),parte:parte.toUpperCase(),color,cant:q,std:st,obs,fecha:cF>=0?PLA.iso(r[cF]):null,armada,us_code:armada?this.grSug(prod,color):null,key:K.key,maestro:K.maestro})}
+    items.push({id:newId(),prod:prod.toUpperCase(),parte:parte.toUpperCase(),color,cant:q,std:st,obs,fecha:cF>=0?PLA.iso(r[cF]):null,armada,us_code:armada?this.usPrevio({key:K.key,color,arts:[prod]}):null,key:K.key,maestro:K.maestro})}
   return {hoja,oee,ini,hsDia,items,hechas,cal,tiempos:T}},
 /* lo que ya está preparado y todavía no se pintó (órdenes abiertas con preparación, y renglones marcados "ya estaba preparado" del plan anterior) */
 preparadoSinPintar(){const pp=pintadoPorOrden();const P=[];const vistas=new Set();
@@ -4137,7 +4139,7 @@ bind(B){const f=$('#plpF');if(f)f.onchange=async()=>{const x=f.files[0];f.value=
   const it=(d,id)=>d.items.find(i=>i.id===id);
   B.querySelectorAll('[data-ppq]').forEach(e=>e.onchange=()=>{const v=parseInt(e.value,10);if(!(v>0)){toast('Cantidad inválida');return}this.mut(d=>it(d,e.dataset.ppq).cant=v)});
   B.querySelectorAll('[data-ppo]').forEach(e=>e.onchange=()=>this.mut(d=>it(d,e.dataset.ppo).obs=e.value.trim()));
-  B.querySelectorAll('[data-ppa]').forEach(e=>e.onchange=()=>this.mut(d=>{const x=it(d,e.dataset.ppa);x.armada=e.checked;if(x.armada&&!x.us_code)x.us_code=this.grSug(x.prod,x.color)}));
+  B.querySelectorAll('[data-ppa]').forEach(e=>e.onchange=()=>this.mut(d=>{const x=it(d,e.dataset.ppa);x.armada=e.checked;if(x.armada&&!x.us_code)x.us_code=this.usPrevio({key:x.key,color:x.color,arts:[x.prod]})}));
   B.querySelectorAll('[data-pph]').forEach(b=>b.onclick=()=>this.mut(d=>{const x=it(d,b.dataset.pph);x.hecho=!x.hecho;x.hechoTs=x.hecho?new Date().toISOString():null}));
   B.querySelectorAll('[data-ppx]').forEach(b=>b.onclick=()=>{if(confirm('¿Quitar este renglón del plan?'))this.mut(d=>{d.items=d.items.filter(i=>i.id!==b.dataset.ppx)})});
   B.querySelectorAll('[data-ppm]').forEach(b=>b.onclick=()=>{const [id,dd]=b.dataset.ppm.split('.');this.mut(d=>{const i=d.items.findIndex(x=>x.id===id);if(dd==='fin'){if(i>=0)d.items.push(d.items.splice(i,1)[0]);return}let j=i+(+dd);while(j>=0&&j<d.items.length&&d.items[j].hecho)j+=(+dd);if(i<0||j<0||j>=d.items.length)return;const [x]=d.items.splice(i,1);d.items.splice(j,0,x)})});
