@@ -1,4 +1,4 @@
-/* Spotsline · Botón "Generar reporte" del avance semanal del premio (v3 2026-11-06)
+/* Spotsline · Botón "Generar reporte" del avance semanal del premio (v4 2026-11-26: premio proporcional a los días hábiles)
    Se agrega al panel con:  <script src="reporte.js"></script>  antes de </body>.
    Usa los datos en vivo del panel (GR.calc) y abre una hoja lista para imprimir / guardar en PDF. */
 (function(){
@@ -75,7 +75,50 @@
     var dd=function(f){var x=d(f);return String(x.getDate()).padStart(2,'0')+'/'+String(x.getMonth()+1).padStart(2,'0')};
     var sg=function(v){return (v>=0?'+':'−')+f0(Math.abs(v))};
     var cont=D.cerrado?'':' (contando hoy)', dias=D.diasR===1?'el día que queda':'los '+D.diasR+' días que quedan';
-    var lv=[['Nivel 1',D.U1,'$40.000'],['Nivel 2',D.U2,'$50.000'],['Nivel 3',D.U3,'$60.000']].map(function(a){var fa=a[1]-D.hechas;
+    var hab=D.rows.filter(function(r){var x=d(r.f).getDay();return x>=1&&x<=5}).length, fac=D.rows[0].f>='2026-11-26'?Math.min(5,hab)/5:1, pz=function(m){return '.map(function(a){var fa=a[1]-D.hechas;
+      return '<div class="lv"><b>'+a[0]+'</b><span>'+f0(a[1])+' <small>US</small></span>'+(fa>0?'<em>faltan '+f0(fa)+' US</em>':'<em class="ok">¡LOGRADO!</em>')+'<i>'+a[2]+'</i></div>'}).join('');
+    var needs=D.diasR?('<div class="need"><div class="nd l1"><div class="l">Nivel 1 · objetivo '+f0(D.U1)+' US</div><div class="v">'+f0(D.need1)+' <small>US por día</small></div><div class="n">en '+dias+cont+' · '+(D.xtra>0.5?'incluye +'+f0(D.xtra)+' US por horas extra':'sin horas extra por ahora')+'</div></div>'+
+      '<div class="nd l2"><div class="l">Nivel 2 · objetivo '+f0(D.U2)+' US</div><div class="v">'+f0(D.need2)+' <small>US por día</small></div><div class="n">en '+dias+cont+'</div></div></div>'):'';
+    return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Avance diario '+dd(D.hoy).replace('/','-')+'</title>'+
+     '<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet"><style>'+CSS+'</style></head><body><div class="pg">'+
+     '<div class="bar0"><button class="s" onclick="window.close()">Cerrar</button><button onclick="window.print()">Imprimir / Guardar PDF</button></div>'+
+     '<div class="top"><div><h1>Avance de la semana</h1><div class="sub">Premio de producción · semana del jueves '+dd(r0)+' al miércoles '+dd(r1)+'</div></div><div class="stamp">Actualizado '+lab(D.hoy)+' · '+hora+' h<br>1 US = 8,5 min estándar</div></div>'+
+     '<div class="duo"><div class="box '+(D.okHoy?'ok':'bad')+'"><div class="k">Hoy · '+lab(D.hoy)+'</div><div class="big">'+f0(D.usHoy)+' <small>US de '+f0(D.meta)+' (meta)</small></div>'+
+     '<div class="row"><span>'+(D.cerrado?'Meta del día (nivel 1)':'A las '+hora+' había que llevar')+'</span><b>'+f0(D.metaNow)+' US</b></div>'+
+     '<div class="st"><span>'+(D.okHoy?'EN CAMINO AL NIVEL 1':'ATRASADOS')+'</span><span>'+sg(D.usHoy-D.metaNow)+' US</span></div></div>'+
+     '<div class="box '+(D.dif>=0?'ok':'bad')+'"><div class="k">Semana acumulada</div><div class="big">'+f0(D.hechas)+' <small>US</small></div>'+
+     '<div class="row"><span>Objetivo a esta altura</span><b>'+f0(D.objA)+' US</b></div><div class="st"><span>Diferencia</span><span>'+sg(D.dif)+' US</span></div></div></div>'+
+     needs+'<h2>Día por día</h2>'+svg(D)+
+     '<div class="legend"><span><i style="background:#1d8753"></i>Llegó a la meta del día</span><span><i style="background:#d9a441"></i>No llegó a la meta</span><span><i style="background:#c43f2c"></i>Hoy, por debajo de la meta</span><span><i style="border:2px dashed #2563c4"></i>Lo que hay que hacer para el nivel 1</span><span><i style="border-top:2.5px dashed #1b1a17;height:0;vertical-align:3px"></i>Meta del día: lo que hacía falta por día para llegar al nivel 1</span></div>'+
+     '<h2>Niveles de la semana</h2><div class="ladder">'+lv+'</div>'+
+     '<div class="foot">Objetivo con 25 personas y las horas extra cargadas en el panel (Día en planta). Las faltas no cambian el objetivo. Si hay horas extra, el objetivo del día sube en proporción.</div>'+
+     '</div></body></html>';
+  }
+
+  function generar(){
+    var D; try{D=datos()}catch(e){alert('No pude armar el reporte: '+e.message);return}
+    var h=html(D), w=window.open('','_blank');
+    if(!w){alert('El navegador bloqueó la ventana del reporte. Permití las ventanas emergentes para este sitio.');return}
+    w.document.open(); w.document.write(h); w.document.close();
+  }
+
+  function boton(){
+    if(document.getElementById('spRepBtn')) return;
+    var b=document.createElement('button'); b.id='spRepBtn'; b.type='button'; b.textContent='Generar reporte';
+    b.title='Avance de la semana del premio, listo para imprimir';
+    b.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;font:700 14px Inter,Arial,sans-serif;padding:11px 18px;border-radius:999px;border:0;background:#1d8753;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer;display:none';
+    b.onclick=generar; document.body.appendChild(b);
+    // solo en Planta en vivo → pestaña "Objetivo"
+    var vis=function(){var t=document.querySelector('button[data-ps="grat"]');
+      var ok=typeof GR!=='undefined'&&GR.calc&&/^#planta/.test(location.hash)&&t&&t.classList.contains('on')&&t.offsetParent!==null;
+      b.style.display=ok?'block':'none'};
+    vis(); window.addEventListener('hashchange',vis); document.addEventListener('click',function(){setTimeout(vis,50)},true); setInterval(vis,1000);
+  }
+  window.SPReporte={generar:generar,datos:datos,html:html};
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boton); else boton();
+})();
++f0(m*fac)+(fac<1?' ('+hab+' días)':'')};
+    var lv=[['Nivel 1',D.U1,pz(40000)],['Nivel 2',D.U2,pz(50000)],['Nivel 3',D.U3,pz(60000)]].map(function(a){var fa=a[1]-D.hechas;
       return '<div class="lv"><b>'+a[0]+'</b><span>'+f0(a[1])+' <small>US</small></span>'+(fa>0?'<em>faltan '+f0(fa)+' US</em>':'<em class="ok">¡LOGRADO!</em>')+'<i>'+a[2]+'</i></div>'}).join('');
     var needs=D.diasR?('<div class="need"><div class="nd l1"><div class="l">Nivel 1 · objetivo '+f0(D.U1)+' US</div><div class="v">'+f0(D.need1)+' <small>US por día</small></div><div class="n">en '+dias+cont+' · '+(D.xtra>0.5?'incluye +'+f0(D.xtra)+' US por horas extra':'sin horas extra por ahora')+'</div></div>'+
       '<div class="nd l2"><div class="l">Nivel 2 · objetivo '+f0(D.U2)+' US</div><div class="v">'+f0(D.need2)+' <small>US por día</small></div><div class="n">en '+dias+cont+'</div></div></div>'):'';
