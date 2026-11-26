@@ -4091,7 +4091,10 @@ std(it){return it.std||+(S.M.pintura_std?.items?.[it.key])||null},
 stdKey(k){if(!k)return null;for(const it of this.data().items||[])if(it.key===k&&it.std)return it.std;return null},
 /* renglón del plan de una orden de pintura (para las que salen armadas) */
 itemDeOpint(id){return (this.data().items||[]).find(i=>i.opint===id)||null},
-armadaDeTanda(e){if(e.tipo!=='tanda'||!e.opint)return null;const it=this.itemDeOpint(e.opint);const o=(S.opint||[]).find(x=>x.id===e.opint);const armada=it?it.armada:o?.armada;const code=(it&&it.us_code)||o?.us_code;return armada&&code?code:null},
+armadaDeTanda(e){if(e.tipo!=='tanda'||!e.opint)return null;const it=this.itemDeOpint(e.opint);const o=(S.opint||[]).find(x=>x.id===e.opint);const armada=it?it.armada:o?.armada;const code=(it&&it.us_code)||o?.us_code||(armada?this.usPrevio(o||it):null);return armada&&code?code:null},
+ /* sale armada pero sin código de unidades spot: el de la última orden de pintura de la misma pieza y color, o el sugerido por artículo y color */
+ usPrevio(x){if(!x)return null;const key=x.key,col=nrm(x.color||'');const prev=(S.opint||[]).filter(o=>o.us_code&&o.key===key&&nrm(o.color||'')===col).sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||'')))[0];if(prev)return prev.us_code;
+   for(const a of [].concat(x.arts||x.prod||[])){const g=this.grSug(a,x.color);if(g)return g}return null},
 /* avance: lo pintado OK desde que se cargó el plan, por orden de pintura creada desde el renglón o por pieza y color */
 avance(desde){const pp=pintadoPorOrden();const its=this.data().items||[];const lig=new Set(its.map(i=>i.opint).filter(Boolean));const pool={};
   for(const e of entPint())if(e.tipo==='tanda'&&e.fecha>=desde&&!(e.opint&&lig.has(e.opint))){const k=e.key+'·'+nrm(e.color);pool[k]=(pool[k]||0)+(+e.ok||0)}
