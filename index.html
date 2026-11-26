@@ -2916,6 +2916,7 @@ const GR_HIST=[{"semana": "2026-05-28", "dias": 3, "us": 2607.3, "horas": 568.75
 /* días antes de cargar armado en el panel (Avance semana 22-10, PLAN ARMADO) */
 /* productivos (nómina del premio): sus horas extra del reloj suman al objetivo */
 const GR_PROD=['Aguilar Bryan','Ayala Jose','Azcona Daniel','Diaz Mauro','Ferreyra Santiago','Lick Diego','Lo Russo Marcos','Medina Gabriel','Ruiz Dario','Scola Sebastian','Yelli Matias','Bacchetta Laureano','Fariña Federico','Muñoz Diego','Muñoz Juan','Ramos Brandon','Zelarayan Facundo','Aguilar Gustavo','Barrios Daiana','Diaz Carolina','Lambare Noelia','Leiva Tatiana','Noguera Pedro','Sandoval Miguel','Zuñiga Brenda'];
+const GR_TALLER=['Aguilar Bryan','Ayala Jose','Azcona Daniel','Diaz Mauro','Ferreyra Santiago','Lick Diego','Lo Russo Marcos','Medina Gabriel','Ruiz Dario','Scola Sebastian','Yelli Matias'];
 const GR_RELOJ_DESDE='2026-11-26';
 const GR_MAN={'2026-10-22':{presentes:25,parada:0,extraPers:13,extraHoras:4,usManual:996.1,fuente:'Plan armado'},'2026-10-23':{presentes:25,parada:0,extraPers:0,extraHoras:0,usManual:917.7,fuente:'Plan armado'}};
 const GR={
@@ -2931,18 +2932,20 @@ const GR={
  /* minutos productivos desde el inicio del turno hasta t (sin el desayuno) */
  prodMin(t,c){const ini=this.m(c.inicio),fin=this.m(c.fin),r0=this.m(c.refIni),r1=r0+(+c.refMin||0);const e=Math.min(Math.max(t,ini),fin);const ov=Math.max(0,Math.min(e,r1)-Math.max(ini,r0));return Math.max(0,e-ini-ov)},
  jornada(c){return this.prodMin(this.m(c.fin),c)},
- dayInfo(f,c){const d=this.dias()[f]||{};const pres=d.presentes!=null&&d.presentes!==''&&isFinite(+d.presentes)?+d.presentes:+c.personas;let xp=Math.max(0,+d.extraPers||0),xh=Math.max(0,+d.extraHoras||0);const ref=+c.refMin||0;let xnet=xp*Math.max(0,xh*60-ref),reloj=false,xgente=null;
-   /* horas extra: cuando el reloj ya tiene las salidas del día, mandan las del reloj (productivos); antes, lo previsto en Día en planta. Feriado/sábado trabajado con presentes 0: se queda con lo mayor */
-   const R=this.xReloj(f,ref);if(R&&(pres>0||R.net>=xnet)){xp=R.n;xh=R.maxH;xnet=R.net;reloj=true;xgente=R.gente}
-   return {pres,par:Math.max(0,+d.parada||0),xp,xh,xnet,reloj,xgente,cargado:!!this.dias()[f]}},
- xReloj(f,ref){if(f<GR_RELOJ_DESDE||!S.horas||!S.horasHasta||S.horasHasta<=f||typeof empleadoHoras!=='function')return null;const [y,m,dd]=f.split('-');const dmy=`${dd}/${m}/${y}`;const hm=s=>{const a=String(s||'0:0').split(':');return (+a[0]||0)*60+(+a[1]||0)};
-   let n=0,net=0,maxH=0;const gente=[];for(const p of (S.M.personal?.items||[])){if(!GR_PROD.includes(p.nombre))continue;const e=empleadoHoras(p.id);const x=e&&(e.dias||[]).find(z=>z.date===dmy);if(!x)continue;const H=Math.floor((hm(x.e50)+hm(x.e100))/60);if(H<1)continue;n++;net+=Math.max(0,H*60-(ref||0));maxH=Math.max(maxH,H);gente.push(p.nombre+' '+H+' h')}
-   return {n,net,maxH,gente}},
+ dayInfo(f,c){const d=this.dias()[f]||{};const pres=d.presentes!=null&&d.presentes!==''&&isFinite(+d.presentes)?+d.presentes:+c.personas;const xp=Math.max(0,+d.extraPers||0),xh=Math.max(0,+d.extraHoras||0);const ref=+c.refMin||0;const xnet=xp*Math.max(0,xh*60-ref);
+   /* horas extra de TALLER (del reloj): suman al objetivo del día hábil siguiente (decisión 26/11). Las de Pintura y Armado: las previstas en Día en planta, el mismo día */
+   const T=pres>0?this.xTaller(f,ref):null;
+   return {pres,par:Math.max(0,+d.parada||0),xp,xh,xnet,xt:T?T.net:0,xtGente:T?T.gente:null,xtDe:T?T.de:null,xtPend:!!(T&&T.pend),cargado:!!this.dias()[f]}},
+ diaHab(f){const d=this.dias()[f];if(d&&d.presentes!=null&&d.presentes!==''&&+d.presentes===0)return false;return this.isWork(f)||!!(d&&+d.presentes>0)},
+ xTaller(f,ref){if(f<GR_RELOJ_DESDE||typeof empleadoHoras!=='function')return null;let p=addDays(f,-1),k=0;while(!this.diaHab(p)&&k<10){p=addDays(p,-1);k++}const dias=[];for(let x=p;x<f;x=addDays(x,1))dias.push(x);
+   if(!S.horas||!S.horasHasta||S.horasHasta<f)return {net:0,gente:[],de:dias,pend:true};const hm=s=>{const q=String(s||'0:0').split(':');return (+q[0]||0)*60+(+q[1]||0)};let net=0;const gente=[];
+   for(const x of dias){const [y,m,dd]=x.split('-');const dmy=`${dd}/${m}/${y}`;for(const pp of (S.M.personal?.items||[])){if(!GR_TALLER.includes(pp.nombre))continue;const em=empleadoHoras(pp.id);const z=em&&(em.dias||[]).find(q=>q.date===dmy);if(!z)continue;const H=Math.floor((hm(z.e50)+hm(z.e100))/60);if(H<1)continue;net+=Math.max(0,H*60-(ref||0));gente.push(pp.nombre+' '+H+' h ('+x.slice(8)+'/'+x.slice(5,7)+')')}}
+   return {net,gente,de:dias,pend:false}},
  /* turno distinto un día puntual (ej. sábado de 6 a 12) */
  cDia(f,c){const d=this.dias()[f]||{};return d.ini||d.fin?{...c,inicio:d.ini||c.inicio,fin:d.fin||c.fin}:c},
  dayEnd(f,c){c=this.cDia(f,c);const {xp,xh}=this.dayInfo(f,c);return this.m(c.fin)+(xp>0?xh*60:0)},
- personMin(f,t,c){c=this.cDia(f,c);const {pres,par,xp,xh,xnet}=this.dayInfo(f,c);const J=this.jornada(c)||1;const fin=this.m(c.fin);let pm=pres*this.prodMin(t,c)*Math.max(0,1-par/J);
-   if(xnet>0&&xh>0&&t>fin){const X=xh*60;pm+=xnet*Math.min(1,(t-fin)/X)}return pm},
+ personMin(f,t,c){c=this.cDia(f,c);const {pres,par,xp,xh,xnet,xt}=this.dayInfo(f,c);const J=this.jornada(c)||1;const fin=this.m(c.fin);let pm=pres*this.prodMin(t,c)*Math.max(0,1-par/J);
+   if(xt>0)pm+=xt*Math.min(1,this.prodMin(t,c)/J);if(xnet>0&&xh>0&&t>fin){const X=xh*60;pm+=xnet*Math.min(1,(t-fin)/X)}return pm},
  obj(pm,c){return c.objEf*pm/c.minUS},piso(pm,c){return c.pisoEf*pm/c.minUS},
  std(code){return USM.std(code)},
  lotes(f,c){c=c||this.c();const A=entArm().filter(e=>e.tipo==='armado'&&e.fecha===f).map(e=>{const st=this.std(String(e.code||'').toUpperCase());const q=+e.qty||0;
